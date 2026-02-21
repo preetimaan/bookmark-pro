@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bookmark Pro</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --border: #0f3460;
+      --text: #e8e8e8;
+      --muted: #a0a0a0;
+      --accent: #4a7cba;
+      --accent-hover: #5d8fd4;
+      --success: #4ecca3;
+      --warning-bg: rgba(74, 124, 186, 0.12);
+      --warning-border: #3d6a9e;
+      --tag-bg: #0f3460;
+      --tag-text: #a0c4f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* --- Top bar --- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .topbar h1 { font-size: 1.2rem; margin-right: 32px; }
+    .top-tabs { display: flex; gap: 4px; }
+    .top-tabs button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 8px 20px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      border-bottom: 2px solid transparent;
+    }
+    .top-tabs button:hover { color: var(--text); }
+    .top-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .topbar-spacer { flex: 1; }
+    .topbar .settings-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .topbar .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* --- Top-level views --- */
+    .view { display: none; flex: 1; overflow: hidden; }
+    .view.active { display: flex; flex-direction: column; }
+
+    /* --- Bookmarks view --- */
+    #view-bookmarks {
+      flex-direction: row !important;
+    }
+    .sidebar {
+      width: 260px;
+      min-width: 200px;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 12px 0;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 0 16px 12px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .folder-tree { list-style: none; padding: 0; }
+    .folder-tree li { cursor: pointer; }
+    .folder-tree .folder-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      font-size: 0.9rem;
+      border-left: 3px solid transparent;
+    }
+    .folder-tree .folder-row:hover { background: rgba(255,255,255,0.04); }
+    .folder-tree .folder-row.selected { background: rgba(74, 124, 186, 0.15); border-left-color: var(--accent); }
+    .folder-tree .folder-row .arrow {
+      width: 16px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .folder-tree .folder-row .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .folder-tree .folder-row .folder-count { color: var(--muted); font-size: 0.8rem; }
+    .folder-tree ul { list-style: none; padding-left: 20px; }
+
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .main-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .main-toolbar input[type="text"] {
+      flex: 1;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .main-toolbar input[type="text"]:focus { border-color: var(--accent); }
+    .main-toolbar input[type="text"]::placeholder { color: var(--muted); }
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+    button.small {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    button.small:hover { border-color: var(--accent); color: var(--accent); }
+
+    .bookmark-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+    .bookmark-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .bookmark-row:hover { background: rgba(255,255,255,0.03); }
+    .bookmark-row.selected { background: rgba(74, 124, 186, 0.12); }
+    .bookmark-row input[type="checkbox"] { flex-shrink: 0; }
+    .bookmark-info { flex: 1; min-width: 0; }
+    .bookmark-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bookmark-url {
+      color: var(--muted);
+      font-size: 0.8rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-decoration: none;
+      display: block;
+    }
+    a.bookmark-url:hover { color: var(--accent); text-decoration: underline; }
+    .bookmark-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .tag-pill {
+      display: inline-block;
+      background: var(--tag-bg);
+      color: var(--tag-text);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .tag-pill:hover { background: var(--accent); color: white; }
+    .bookmark-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
+
+    .bottom-bar {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .bottom-bar.visible { display: flex; }
+    .bottom-bar .selection-count { color: var(--muted); font-size: 0.85rem; margin-right: auto; }
+
+    .empty-state {
+      color: var(--muted);
+      text-align: center;
+      padding: 48px 24px;
+      font-size: 0.95rem;
+    }
+
+    /* --- Cleanup view (existing) --- */
+    #view-cleanup {
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    /* Cleanup sub-tabs and styles (carried over from options.html) */
+    .warning {
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tabs button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 12px 20px;
+      cursor: pointer;
+      font-size: 1rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tabs button:hover { color: var(--text); }
+    .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .panel h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    .scan-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .loading { color: var(--muted); }
+    .results { margin-top: 16px; }
+    .group {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .group-header label { cursor: pointer; font-size: 0.9rem; }
+    .group-header input[type="checkbox"] { margin-right: 6px; }
+    .item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .item:last-child { border-bottom: none; }
+    .item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+    .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; text-decoration: none; display: block; }
+    a.item-url:hover { color: var(--accent); text-decoration: underline; }
+    .item-title { font-weight: 500; }
+    .merge-target { margin-left: 8px; font-size: 0.85rem; color: var(--success); }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.2s ease;
+    }
+    .error-badge {
+      display: inline-block;
+      background: var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-left: 8px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 100;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <h1>Bookmark Pro</h1>
+    <div class="top-tabs">
+      <button type="button" data-view="bookmarks" class="active">Bookmarks</button>
+      <button type="button" data-view="cleanup">Cleanup</button>
+    </div>
+    <div class="topbar-spacer"></div>
+    <button type="button" class="settings-btn" id="settings-btn">Settings</button>
+  </div>
+
+  <!-- Bookmarks view -->
+  <div id="view-bookmarks" class="view active">
+    <div class="sidebar">
+      <div class="sidebar-header">Folders</div>
+      <ul class="folder-tree" id="folder-tree"></ul>
+    </div>
+    <div class="main-area">
+      <div class="main-toolbar">
+        <input type="text" id="search-input" placeholder="Search bookmarks..." />
+      </div>
+      <div class="bookmark-list" id="bookmark-list">
+        <div class="empty-state">Select a folder to view bookmarks.</div>
+      </div>
+      <div class="bottom-bar" id="bottom-bar">
+        <span class="selection-count" id="selection-count">0 selected</span>
+        <button type="button" class="small" id="bulk-delete">Delete</button>
+        <button type="button" class="small" id="bulk-move">Move to…</button>
+        <button type="button" class="small" id="bulk-tag">Tag…</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cleanup view -->
+  <div id="view-cleanup" class="view">
+    <div class="warning">
+      <strong>Backup first.</strong> Removed bookmarks cannot be restored. Export your bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export bookmarks) before deleting.
+    </div>
+
+    <div class="tabs" id="cleanup-tabs">
+      <button type="button" data-tab="duplicates" class="active">Duplicate URLs</button>
+      <button type="button" data-tab="empty">Empty folders</button>
+      <button type="button" data-tab="merge">Merge folders</button>
+      <button type="button" data-tab="subset">Similar URLs</button>
+      <button type="button" data-tab="similar-folders">Similar folders</button>
+      <button type="button" data-tab="broken">Broken links</button>
+    </div>
+
+    <div id="panel-duplicates" class="panel active">
+      <h2>Duplicate URLs</h2>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-duplicates">Find duplicates</button>
+        <span id="dup-status" class="loading"></span>
+      </div>
+      <div id="dup-results" class="results"></div>
+      <div id="dup-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="dup-delete">Delete selected</button>
+      </div>
+    </div>
+
+    <div id="panel-empty" class="panel">
+      <h2>Empty folders</h2>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-empty">Find empty folders</button>
+        <span id="empty-status" class="loading"></span>
+      </div>
+      <div id="empty-results" class="results"></div>
+      <div id="empty-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="empty-delete">Delete selected folders</button>
+      </div>
+    </div>
+
+    <div id="panel-merge" class="panel">
+      <h2>Merge duplicate folders</h2>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name under the same parent. Pick one to keep; others will be merged into it.</p>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-merge">Find merge candidates</button>
+        <span id="merge-status" class="loading"></span>
+      </div>
+      <div id="merge-results" class="results"></div>
+      <div id="merge-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="merge-do">Merge selected groups</button>
+      </div>
+    </div>
+
+    <div id="panel-subset" class="panel">
+      <h2>Similar / subset URLs</h2>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">URLs where one is a prefix of another (e.g. example.com and example.com/page).</p>
+      <div class="scan-row">
+        <label><input type="checkbox" id="subset-strip-query" /> Strip query params when comparing</label>
+      </div>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-subset">Find similar URLs</button>
+        <span id="subset-status" class="loading"></span>
+      </div>
+      <div id="subset-results" class="results"></div>
+      <div id="subset-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="subset-delete">Delete selected</button>
+      </div>
+    </div>
+
+    <div id="panel-similar-folders" class="panel">
+      <h2>Similar folder names</h2>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it.</p>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-similar-folders">Find similar folders</button>
+        <span id="similar-folders-status" class="loading"></span>
+      </div>
+      <div id="similar-folders-results" class="results"></div>
+      <div id="similar-folders-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="similar-folders-merge">Merge selected groups</button>
+      </div>
+    </div>
+
+    <div id="panel-broken" class="panel">
+      <h2>Broken links</h2>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Check all bookmarked URLs for broken links (404, 403, timeout, etc.). This needs permission to access websites.</p>
+      <div class="scan-row">
+        <button type="button" class="primary" id="scan-broken">Check broken links</button>
+        <span id="broken-status" class="loading"></span>
+      </div>
+      <div id="broken-progress" style="display: none; margin-bottom: 16px;">
+        <div class="progress-bar"><div class="progress-fill" id="broken-progress-fill"></div></div>
+        <span id="broken-progress-text" style="font-size: 0.85rem; color: var(--muted);"></span>
+      </div>
+      <div id="broken-results" class="results"></div>
+      <div id="broken-actions" style="display: none; margin-top: 12px;">
+        <button type="button" class="primary" id="broken-delete">Delete selected</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" style="display: none;"></div>
+
+  <script src="lib/bookmarks.js"></script>
+  <script src="lib/tags.js"></script>
+  <script src="lib/duplicates.js"></script>
+  <script src="lib/empty-folders.js"></script>
+  <script src="lib/merge-folders.js"></script>
+  <script src="lib/subset-finder.js"></script>
+  <script src="lib/similar-folders.js"></script>
+  <script src="lib/broken-links.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>

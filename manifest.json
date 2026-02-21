@@ -10,7 +10,7 @@
     "default_title": "Bookmark Cleanup"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "manager.html",
     "open_in_tab": true
   }
 }
