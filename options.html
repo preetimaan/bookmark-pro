@@ -108,7 +108,8 @@
     }
     .item:last-child { border-bottom: none; }
     .item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
-    .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; }
+    .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; text-decoration: none; display: block; }
+    a.item-url:hover { color: var(--accent); text-decoration: underline; }
     .item-title { font-weight: 500; }
     .empty-state { color: var(--muted); padding: 24px; text-align: center; }
     .merge-target { margin-left: 8px; font-size: 0.85rem; color: var(--success); }
@@ -123,6 +124,30 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       z-index: 100;
       animation: fadeIn 0.2s ease;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.2s ease;
+    }
+    .error-badge {
+      display: inline-block;
+      background: var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-left: 8px;
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   </style>
@@ -140,6 +165,7 @@
     <button type="button" data-tab="merge">Merge folders</button>
     <button type="button" data-tab="subset">Similar URLs</button>
     <button type="button" data-tab="similar-folders">Similar folders</button>
+    <button type="button" data-tab="broken">Broken links</button>
   </div>
 
   <div id="panel-duplicates" class="panel active">
@@ -208,6 +234,23 @@
     </div>
   </div>
 
+  <div id="panel-broken" class="panel">
+    <h2>Broken links</h2>
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Check all bookmarked URLs for broken links (404, 403, timeout, etc.). This needs permission to access websites.</p>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-broken">Check broken links</button>
+      <span id="broken-status" class="loading"></span>
+    </div>
+    <div id="broken-progress" style="display: none; margin-bottom: 16px;">
+      <div class="progress-bar"><div class="progress-fill" id="broken-progress-fill"></div></div>
+      <span id="broken-progress-text" style="font-size: 0.85rem; color: var(--muted);"></span>
+    </div>
+    <div id="broken-results" class="results"></div>
+    <div id="broken-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="broken-delete">Delete selected</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast" style="display: none;"></div>
   <script src="lib/bookmarks.js"></script>
   <script src="lib/duplicates.js"></script>
@@ -215,6 +258,7 @@
   <script src="lib/merge-folders.js"></script>
   <script src="lib/subset-finder.js"></script>
   <script src="lib/similar-folders.js"></script>
+  <script src="lib/broken-links.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

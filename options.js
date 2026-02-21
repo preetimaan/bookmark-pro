@@ -93,7 +93,7 @@ $("scan-duplicates").addEventListener("click", async () => {
         <input type="checkbox" data-dup-id="${item.id}" data-group="${gi}" data-item="${ii}" />
         <div>
           <div class="item-title">${escapeHtml(item.title)}</div>
-          <div class="item-url">${escapeHtml(item.url)}</div>
+          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
         </div>
       `;
       div.appendChild(itemDiv);
@@ -315,7 +315,7 @@ $("scan-subset").addEventListener("click", async () => {
         <input type="checkbox" data-subset-id="${item.id}" data-group="${gi}" data-item="${ii}" />
         <div>
           <div class="item-title">${escapeHtml(item.title)}${keepHint}</div>
-          <div class="item-url">${escapeHtml(item.url)}</div>
+          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
         </div>
       `;
       div.appendChild(itemDiv);
@@ -416,6 +416,126 @@ $("similar-folders-merge").addEventListener("click", async () => {
   bookmarksData = null;
   showToast(`Merged folders. Removed ${merged} folder(s).`);
   $("scan-similar-folders").click();
+});
+
+// --- Broken links ---
+let brokenGroups = [];
+
+$("broken-results").addEventListener("change", function (e) {
+  if (e.target.hasAttribute("data-broken-select-all")) {
+    const group = e.target.closest(".group");
+    if (!group) return;
+    group.querySelectorAll(":scope > .item input[type=checkbox]").forEach((cb) => {
+      cb.checked = e.target.checked;
+    });
+    return;
+  }
+  const group = e.target.closest(".group");
+  if (group) {
+    const selectAllCb = group.querySelector("[data-broken-select-all]");
+    if (!selectAllCb) return;
+    const items = group.querySelectorAll(":scope > .item input[type=checkbox]");
+    selectAllCb.checked = items.length > 0 && Array.from(items).every((cb) => cb.checked);
+  }
+});
+
+$("scan-broken").addEventListener("click", async () => {
+  const status = $("broken-status");
+  const progressDiv = $("broken-progress");
+  const progressFill = $("broken-progress-fill");
+  const progressText = $("broken-progress-text");
+
+  status.textContent = "Requesting permission…";
+  status.className = "loading";
+  $("broken-results").innerHTML = "";
+  $("broken-actions").style.display = "none";
+  progressDiv.style.display = "none";
+
+  const granted = await chrome.permissions.request({ origins: ["<all_urls>"] });
+  if (!granted) {
+    status.textContent = "Permission denied. Cannot check links without access to websites.";
+    status.className = "";
+    return;
+  }
+
+  status.textContent = "Scanning…";
+  progressDiv.style.display = "block";
+  progressFill.style.width = "0%";
+  progressText.textContent = "0 / …";
+
+  const { bookmarks } = await ensureData();
+  const httpBookmarks = bookmarks.filter(
+    (b) => b.url && (b.url.startsWith("http://") || b.url.startsWith("https://"))
+  );
+  progressText.textContent = `0 / ${httpBookmarks.length}`;
+
+  const results = await checkBrokenLinks(httpBookmarks, {
+    concurrency: 5,
+    onProgress(checked, total) {
+      const pct = Math.round((checked / total) * 100);
+      progressFill.style.width = pct + "%";
+      progressText.textContent = `${checked} / ${total}`;
+    },
+  });
+
+  progressDiv.style.display = "none";
+  brokenGroups = groupBrokenLinks(results);
+  const brokenCount = results.filter((r) => r.category !== "ok").length;
+
+  status.textContent =
+    brokenCount === 0
+      ? "All links are working!"
+      : `Found ${brokenCount} broken link(s) in ${brokenGroups.length} category/categories.`;
+  status.className = "";
+
+  if (brokenCount === 0) return;
+
+  const container = $("broken-results");
+  brokenGroups.forEach((group) => {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.innerHTML = `
+      <div class="group-header">
+        <label><input type="checkbox" data-broken-select-all /> Select all</label>
+        <strong>${escapeHtml(group.label)}</strong>
+        <span class="error-badge">${group.items.length} link(s)</span>
+      </div>
+    `;
+    group.items.forEach((item) => {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "item";
+      const errText = item.status ? `${item.status}` : item.error || "Error";
+      itemDiv.innerHTML = `
+        <input type="checkbox" data-broken-id="${item.id}" />
+        <div>
+          <div class="item-title">${escapeHtml(item.title)} <span class="error-badge">${escapeHtml(errText)}</span></div>
+          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+        </div>
+      `;
+      div.appendChild(itemDiv);
+    });
+    container.appendChild(div);
+  });
+
+  $("broken-actions").style.display = "block";
+});
+
+$("broken-delete").addEventListener("click", async () => {
+  const checked = document.querySelectorAll("input[data-broken-id]:checked");
+  if (checked.length === 0) {
+    showToast("Select at least one bookmark to delete.");
+    return;
+  }
+  if (!confirm(`Delete ${checked.length} selected bookmark(s)? This cannot be undone.`)) return;
+
+  for (const el of checked) {
+    await chrome.bookmarks.remove(el.dataset.brokenId);
+  }
+  bookmarksData = null;
+  showToast(`Deleted ${checked.length} bookmark(s).`);
+  $("broken-results").innerHTML = "";
+  $("broken-actions").style.display = "none";
+  $("broken-status").textContent = `Deleted ${checked.length}. Run scan again to recheck.`;
 });
 
 function escapeHtml(s) {
