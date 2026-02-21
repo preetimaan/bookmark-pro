@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Cleanup",
+  "version": "0.1.0",
+  "description": "Clean bookmarks: find duplicates, remove empty folders, merge duplicate folders.",
+  "permissions": ["bookmarks"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Bookmark Cleanup"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

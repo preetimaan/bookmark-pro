@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bookmark Cleanup</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --border: #0f3460;
+      --text: #e8e8e8;
+      --muted: #a0a0a0;
+      --accent: #4a7cba;
+      --accent-hover: #5d8fd4;
+      --success: #4ecca3;
+      --warning-bg: rgba(74, 124, 186, 0.12);
+      --warning-border: #3d6a9e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .warning {
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tabs button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 12px 20px;
+      cursor: pointer;
+      font-size: 1rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tabs button:hover { color: var(--text); }
+    .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .panel h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    .scan-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .loading { color: var(--muted); }
+    .results { margin-top: 16px; }
+    .group {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .group-header label { cursor: pointer; font-size: 0.9rem; }
+    .group-header input[type="checkbox"] { margin-right: 6px; }
+    .item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .item:last-child { border-bottom: none; }
+    .item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+    .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; }
+    .item-title { font-weight: 500; }
+    .empty-state { color: var(--muted); padding: 24px; text-align: center; }
+    .merge-target { margin-left: 8px; font-size: 0.85rem; color: var(--success); }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 100;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <h1>Bookmark Cleanup</h1>
+  <p class="muted" style="margin:0 0 16px; color: var(--muted);">Find duplicate URLs, empty folders, and merge same-name folders.</p>
+  <div class="warning">
+    <strong>Backup first.</strong> Removed bookmarks cannot be restored. Export your bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export bookmarks) before deleting.
+  </div>
+
+  <div class="tabs">
+    <button type="button" data-tab="duplicates" class="active">Duplicate URLs</button>
+    <button type="button" data-tab="empty">Empty folders</button>
+    <button type="button" data-tab="merge">Merge folders</button>
+  </div>
+
+  <div id="panel-duplicates" class="panel active">
+    <h2>Duplicate URLs</h2>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-duplicates">Find duplicates</button>
+      <span id="dup-status" class="loading"></span>
+    </div>
+    <div id="dup-results" class="results"></div>
+    <div id="dup-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="dup-delete">Delete selected</button>
+    </div>
+  </div>
+
+  <div id="panel-empty" class="panel">
+    <h2>Empty folders</h2>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-empty">Find empty folders</button>
+      <span id="empty-status" class="loading"></span>
+    </div>
+    <div id="empty-results" class="results"></div>
+    <div id="empty-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="empty-delete">Delete selected folders</button>
+    </div>
+  </div>
+
+  <div id="panel-merge" class="panel">
+    <h2>Merge duplicate folders</h2>
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name under the same parent. Pick one to keep; others will be merged into it.</p>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-merge">Find merge candidates</button>
+      <span id="merge-status" class="loading"></span>
+    </div>
+    <div id="merge-results" class="results"></div>
+    <div id="merge-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="merge-do">Merge selected groups</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" style="display: none;"></div>
+  <script src="lib/bookmarks.js"></script>
+  <script src="lib/duplicates.js"></script>
+  <script src="lib/empty-folders.js"></script>
+  <script src="lib/merge-folders.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
