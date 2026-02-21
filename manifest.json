@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Bookmark Cleanup",
+  "name": "Bookmark Pro",
   "version": "0.2.0",
-  "description": "Clean bookmarks: find duplicates, remove empty folders, merge folders, check broken links.",
+  "description": "Bookmark manager with tags, cleanup tools: duplicates, empty folders, merge, similar URLs, broken links.",
   "permissions": ["bookmarks", "storage"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": {
-    "default_title": "Bookmark Cleanup"
+    "default_title": "Bookmark Pro"
   },
   "options_ui": {
     "page": "manager.html",
