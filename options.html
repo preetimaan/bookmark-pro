@@ -86,6 +86,18 @@
     }
     .group-header label { cursor: pointer; font-size: 0.9rem; }
     .group-header input[type="checkbox"] { margin-right: 6px; }
+    .group-header .select-all-btn,
+    .group-header .deselect-all-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .group-header .select-all-btn:hover,
+    .group-header .deselect-all-btn:hover { border-color: var(--accent); color: var(--accent); }
     .item {
       display: flex;
       align-items: flex-start;
@@ -117,7 +129,7 @@
 </head>
 <body>
   <h1>Bookmark Cleanup</h1>
-  <p class="muted" style="margin:0 0 16px; color: var(--muted);">Find duplicate URLs, empty folders, and merge same-name folders.</p>
+  <p class="muted" style="margin:0 0 16px; color: var(--muted);">Find duplicate URLs, empty folders, merge same-name folders, similar/subset URLs, and similar folder names.</p>
   <div class="warning">
     <strong>Backup first.</strong> Removed bookmarks cannot be restored. Export your bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export bookmarks) before deleting.
   </div>
@@ -126,6 +138,8 @@
     <button type="button" data-tab="duplicates" class="active">Duplicate URLs</button>
     <button type="button" data-tab="empty">Empty folders</button>
     <button type="button" data-tab="merge">Merge folders</button>
+    <button type="button" data-tab="subset">Similar URLs</button>
+    <button type="button" data-tab="similar-folders">Similar folders</button>
   </div>
 
   <div id="panel-duplicates" class="panel active">
@@ -165,11 +179,42 @@
     </div>
   </div>
 
+  <div id="panel-subset" class="panel">
+    <h2>Similar / subset URLs</h2>
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">URLs where one is a prefix of another (e.g. example.com and example.com/page). Suggest keeping the shortest.</p>
+    <div class="scan-row">
+      <label><input type="checkbox" id="subset-strip-query" /> Strip query params when comparing</label>
+    </div>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-subset">Find similar URLs</button>
+      <span id="subset-status" class="loading"></span>
+    </div>
+    <div id="subset-results" class="results"></div>
+    <div id="subset-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="subset-delete">Delete selected</button>
+    </div>
+  </div>
+
+  <div id="panel-similar-folders" class="panel">
+    <h2>Similar folder names</h2>
+    <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it.</p>
+    <div class="scan-row">
+      <button type="button" class="primary" id="scan-similar-folders">Find similar folders</button>
+      <span id="similar-folders-status" class="loading"></span>
+    </div>
+    <div id="similar-folders-results" class="results"></div>
+    <div id="similar-folders-actions" style="display: none; margin-top: 12px;">
+      <button type="button" class="primary" id="similar-folders-merge">Merge selected groups</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast" style="display: none;"></div>
   <script src="lib/bookmarks.js"></script>
   <script src="lib/duplicates.js"></script>
   <script src="lib/empty-folders.js"></script>
   <script src="lib/merge-folders.js"></script>
+  <script src="lib/subset-finder.js"></script>
+  <script src="lib/similar-folders.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

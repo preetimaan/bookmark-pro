@@ -38,6 +38,27 @@ async function ensureData() {
 // --- Duplicates ---
 let duplicateGroups = [];
 
+function syncSelectAll(group) {
+  const selectAllCb = group.querySelector("[data-dup-select-all], [data-subset-select-all]");
+  if (!selectAllCb) return;
+  const items = group.querySelectorAll(":scope > .item input[type=checkbox]");
+  const allChecked = items.length > 0 && Array.from(items).every((cb) => cb.checked);
+  selectAllCb.checked = allChecked;
+}
+
+$("dup-results").addEventListener("change", function (e) {
+  if (e.target.hasAttribute("data-dup-select-all")) {
+    const group = e.target.closest(".group");
+    if (!group) return;
+    group.querySelectorAll(":scope > .item input[type=checkbox]").forEach((cb) => {
+      cb.checked = e.target.checked;
+    });
+    return;
+  }
+  const group = e.target.closest(".group");
+  if (group) syncSelectAll(group);
+});
+
 $("scan-duplicates").addEventListener("click", async () => {
   const status = $("dup-status");
   status.textContent = "Scanning…";
@@ -60,10 +81,9 @@ $("scan-duplicates").addEventListener("click", async () => {
   duplicateGroups.forEach((group, gi) => {
     const div = document.createElement("div");
     div.className = "group";
-    const selectAllId = `dup-group-${gi}-all`;
     div.innerHTML = `
       <div class="group-header">
-        <label><input type="checkbox" id="${selectAllId}" data-group="${gi}" data-dup-select-all /> Select all in group (to delete)</label>
+        <label><input type="checkbox" data-dup-select-all /> Select all</label>
       </div>
     `;
     group.items.forEach((item, ii) => {
@@ -79,20 +99,6 @@ $("scan-duplicates").addEventListener("click", async () => {
       div.appendChild(itemDiv);
     });
     container.appendChild(div);
-  });
-
-  // Select-all: check all in group except first (suggest keep one)
-  document.querySelectorAll(`[data-dup-select-all]`).forEach((cb) => {
-    cb.addEventListener("change", function () {
-      const gi = parseInt(this.dataset.group, 10);
-      const group = duplicateGroups[gi];
-      group.items.forEach((_, ii) => {
-        const itemCb = document.querySelector(
-          `input[data-dup-id][data-group="${gi}"][data-item="${ii}"]`
-        );
-        if (itemCb) itemCb.checked = ii > 0 ? this.checked : false; // keep first
-      });
-    });
   });
 
   $("dup-actions").style.display = "block";
@@ -255,6 +261,161 @@ $("merge-do").addEventListener("click", async () => {
   bookmarksData = null;
   showToast(`Merged folders. Removed ${merged} duplicate folder(s).`);
   $("scan-merge").click();
+});
+
+// --- Similar / subset URLs ---
+let subsetGroups = [];
+
+$("subset-results").addEventListener("change", function (e) {
+  if (e.target.hasAttribute("data-subset-select-all")) {
+    const group = e.target.closest(".group");
+    if (!group) return;
+    group.querySelectorAll(":scope > .item input[type=checkbox]").forEach((cb) => {
+      cb.checked = e.target.checked;
+    });
+    return;
+  }
+  const group = e.target.closest(".group");
+  if (group) syncSelectAll(group);
+});
+
+$("scan-subset").addEventListener("click", async () => {
+  const status = $("subset-status");
+  status.textContent = "Scanning…";
+  status.className = "loading";
+  $("subset-results").innerHTML = "";
+  $("subset-actions").style.display = "none";
+
+  const stripQuery = $("subset-strip-query").checked;
+  const { bookmarks } = await ensureData();
+  subsetGroups = findSubsetGroups(bookmarks, { stripQuery });
+
+  status.textContent =
+    subsetGroups.length === 0
+      ? "No similar/subset URL groups found."
+      : `Found ${subsetGroups.length} group(s) of similar URLs.`;
+  status.className = "";
+
+  if (subsetGroups.length === 0) return;
+
+  const container = $("subset-results");
+  subsetGroups.forEach((group, gi) => {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.innerHTML = `
+      <div class="group-header">
+        <label><input type="checkbox" data-subset-select-all /> Select all</label>
+      </div>
+    `;
+    group.items.forEach((item, ii) => {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "item";
+      const keepHint = ii === 0 ? ' <span class="merge-target">(shortest – keep)</span>' : "";
+      itemDiv.innerHTML = `
+        <input type="checkbox" data-subset-id="${item.id}" data-group="${gi}" data-item="${ii}" />
+        <div>
+          <div class="item-title">${escapeHtml(item.title)}${keepHint}</div>
+          <div class="item-url">${escapeHtml(item.url)}</div>
+        </div>
+      `;
+      div.appendChild(itemDiv);
+    });
+    container.appendChild(div);
+  });
+
+  $("subset-actions").style.display = "block";
+});
+
+$("subset-delete").addEventListener("click", async () => {
+  const checked = document.querySelectorAll("input[data-subset-id]:checked");
+  if (checked.length === 0) {
+    showToast("Select at least one bookmark to delete.");
+    return;
+  }
+  if (!confirm(`Delete ${checked.length} selected bookmark(s)? This cannot be undone.`)) return;
+
+  for (const el of checked) {
+    await chrome.bookmarks.remove(el.dataset.subsetId);
+  }
+  bookmarksData = null;
+  showToast(`Deleted ${checked.length} bookmark(s).`);
+  $("scan-subset").click();
+});
+
+// --- Similar folder names (nested) ---
+let similarFolderGroups = [];
+
+$("scan-similar-folders").addEventListener("click", async () => {
+  const status = $("similar-folders-status");
+  status.textContent = "Scanning…";
+  status.className = "loading";
+  $("similar-folders-results").innerHTML = "";
+  $("similar-folders-actions").style.display = "none";
+
+  const { folders, tree } = await ensureData();
+  similarFolderGroups = findSimilarFolderGroups(folders, tree);
+
+  status.textContent =
+    similarFolderGroups.length === 0
+      ? "No similar folder names found."
+      : `Found ${similarFolderGroups.length} group(s) of folders with the same name.`;
+  status.className = "";
+
+  if (similarFolderGroups.length === 0) return;
+
+  const container = $("similar-folders-results");
+  similarFolderGroups.forEach((group, gi) => {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.innerHTML = `
+      <div class="group-header">
+        <strong>${escapeHtml(group.title)}</strong> (${group.folders.length} folders) — choose one to keep, others will be merged into it.
+      </div>
+    `;
+    group.folders.forEach((folder, fi) => {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "item";
+      itemDiv.innerHTML = `
+        <input type="radio" name="similar-keep-${gi}" value="${folder.id}" data-group="${gi}" ${fi === 0 ? "checked" : ""} />
+        <div>
+          <span class="item-title">${escapeHtml(folder.path)}</span>
+          <span class="merge-target">${fi === 0 ? " (keep this one)" : ""}</span>
+        </div>
+      `;
+      const input = itemDiv.querySelector("input");
+      input.addEventListener("change", function () {
+        div.querySelectorAll("input[type=radio]").forEach((r) => {
+          const target = r.nextElementSibling?.querySelector(".merge-target");
+          if (target) target.textContent = r.checked ? " (keep this one)" : "";
+        });
+      });
+      div.appendChild(itemDiv);
+    });
+    container.appendChild(div);
+  });
+
+  $("similar-folders-actions").style.display = "block";
+});
+
+$("similar-folders-merge").addEventListener("click", async () => {
+  let merged = 0;
+  for (let gi = 0; gi < similarFolderGroups.length; gi++) {
+    const group = similarFolderGroups[gi];
+    const keepId = document.querySelector(`input[name="similar-keep-${gi}"]:checked`)?.value;
+    if (!keepId) continue;
+    const others = group.folders.filter((f) => f.id !== keepId);
+    for (const folder of others) {
+      const children = await chrome.bookmarks.getChildren(folder.id);
+      for (const child of children) {
+        await chrome.bookmarks.move(child.id, { parentId: keepId });
+      }
+      await chrome.bookmarks.remove(folder.id);
+      merged++;
+    }
+  }
+  bookmarksData = null;
+  showToast(`Merged folders. Removed ${merged} folder(s).`);
+  $("scan-similar-folders").click();
 });
 
 function escapeHtml(s) {
