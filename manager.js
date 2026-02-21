@@ -162,6 +162,67 @@ async function renderBookmarkList(folderId) {
   updateSelectionCount();
 }
 
+// --- Inline editing ---
+$("bookmark-list").addEventListener("dblclick", (e) => {
+  const titleEl = e.target.closest(".bookmark-title");
+  const urlEl = e.target.closest(".bookmark-url");
+  const target = titleEl || urlEl;
+  if (!target || target.isContentEditable) return;
+
+  const row = target.closest(".bookmark-row");
+  if (!row) return;
+  const bmId = row.dataset.id;
+
+  target.setAttribute("contenteditable", "true");
+  target.classList.add("editing");
+  target.focus();
+
+  const sel = window.getSelection();
+  sel.selectAllChildren(target);
+
+  async function commit() {
+    target.removeAttribute("contenteditable");
+    target.classList.remove("editing");
+    target.removeEventListener("blur", commit);
+    target.removeEventListener("keydown", onKey);
+
+    const newValue = target.textContent.trim();
+    if (!newValue) {
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+      return;
+    }
+
+    try {
+      if (titleEl) {
+        const tags = await getTagsForBookmark(bmId);
+        const priorityTags = await loadPriorityTags();
+        const newTitle = buildTitle(newValue, tags, priorityTags);
+        await chrome.bookmarks.update(bmId, { title: newTitle });
+      } else {
+        await chrome.bookmarks.update(bmId, { url: newValue });
+      }
+      invalidateData();
+    } catch (err) {
+      showToast("Failed to save: " + err.message);
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+    }
+  }
+
+  function onKey(e) {
+    if (e.key === "Enter") { e.preventDefault(); target.blur(); }
+    if (e.key === "Escape") {
+      target.removeEventListener("blur", commit);
+      target.removeEventListener("keydown", onKey);
+      target.removeAttribute("contenteditable");
+      target.classList.remove("editing");
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+    }
+  }
+
+  target.addEventListener("blur", commit, { once: true });
+  target.addEventListener("keydown", onKey);
+});
+
 // --- Selection ---
 $("bookmark-list").addEventListener("change", (e) => {
   if (e.target.matches('input[data-bm-id]')) {

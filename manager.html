@@ -174,7 +174,20 @@
     .bookmark-row.selected { background: rgba(74, 124, 186, 0.12); }
     .bookmark-row input[type="checkbox"] { flex-shrink: 0; }
     .bookmark-info { flex: 1; min-width: 0; }
-    .bookmark-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bookmark-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+    .bookmark-title.editing,
+    .bookmark-url.editing {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      padding: 2px 6px;
+      outline: none;
+      color: var(--text);
+      font: inherit;
+      white-space: pre;
+      overflow: visible;
+      text-overflow: clip;
+    }
     .bookmark-url {
       color: var(--muted);
       font-size: 0.8rem;
