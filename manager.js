@@ -493,6 +493,72 @@ $("bulk-tag").addEventListener("click", async () => {
   if (selectedFolderId) renderBookmarkList(selectedFolderId);
 });
 
+// --- Search ---
+let searchTimeout = null;
+$("search-input").addEventListener("input", () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const query = $("search-input").value.trim().toLowerCase();
+    if (!query) {
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+      return;
+    }
+    searchBookmarks(query);
+  }, 250);
+});
+
+async function searchBookmarks(query) {
+  const { bookmarks } = await ensureData();
+  const allTags = await loadAllTags();
+
+  const results = bookmarks.filter((bm) => {
+    const { baseTitle } = parseTitle(bm.title);
+    const tags = allTags[bm.id] || [];
+    return (
+      baseTitle.toLowerCase().includes(query) ||
+      bm.url.toLowerCase().includes(query) ||
+      tags.some((t) => t.toLowerCase().includes(query))
+    );
+  });
+
+  const container = $("bookmark-list");
+  if (results.length === 0) {
+    container.innerHTML = '<div class="empty-state">No bookmarks match your search.</div>';
+    return;
+  }
+
+  container.innerHTML = "";
+  for (const bm of results) {
+    const { baseTitle } = parseTitle(bm.title);
+    const tags = allTags[bm.id] || [];
+    const dateStr = bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString() : "";
+    const tagPills = tags.map((t) =>
+      `<span class="tag-pill">${escapeHtml(t)}<span class="tag-remove" data-bm-id="${bm.id}" data-tag="${escapeHtml(t)}">✕</span></span>`
+    ).join("");
+
+    const row = document.createElement("div");
+    row.className = "bookmark-row";
+    row.dataset.id = bm.id;
+    row.innerHTML = `
+      <input type="checkbox" data-bm-id="${bm.id}" />
+      <div class="bookmark-info">
+        <div class="bookmark-title">${escapeHtml(baseTitle)}</div>
+        <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+        <div class="bookmark-tags">
+          ${tagPills}
+          <span class="tag-input-wrap">
+            <input type="text" class="tag-add-input" data-bm-id="${bm.id}" placeholder="+ tag" />
+            <div class="tag-autocomplete"></div>
+          </span>
+        </div>
+      </div>
+      <span class="bookmark-date">${dateStr}</span>
+    `;
+    container.appendChild(row);
+  }
+  updateSelectionCount();
+}
+
 // --- Init ---
 renderFolderTree();
 
