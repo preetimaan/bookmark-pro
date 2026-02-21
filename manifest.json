@@ -3,7 +3,7 @@
   "name": "Bookmark Cleanup",
   "version": "0.2.0",
   "description": "Clean bookmarks: find duplicates, remove empty folders, merge folders, check broken links.",
-  "permissions": ["bookmarks"],
+  "permissions": ["bookmarks", "storage"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": {
