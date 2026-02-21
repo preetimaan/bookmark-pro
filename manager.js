@@ -147,12 +147,21 @@ async function renderBookmarkList(folderId) {
     const row = document.createElement("div");
     row.className = "bookmark-row";
     row.dataset.id = bm.id;
+    const tagPills = tags.map((t) =>
+      `<span class="tag-pill">${escapeHtml(t)}<span class="tag-remove" data-bm-id="${bm.id}" data-tag="${escapeHtml(t)}">✕</span></span>`
+    ).join("");
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
         <div class="bookmark-title">${escapeHtml(baseTitle)}</div>
         <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
-        <div class="bookmark-tags">${tags.map((t) => `<span class="tag-pill">${escapeHtml(t)}</span>`).join("")}</div>
+        <div class="bookmark-tags">
+          ${tagPills}
+          <span class="tag-input-wrap">
+            <input type="text" class="tag-add-input" data-bm-id="${bm.id}" placeholder="+ tag" />
+            <div class="tag-autocomplete"></div>
+          </span>
+        </div>
       </div>
       <span class="bookmark-date">${dateStr}</span>
     `;
@@ -255,6 +264,166 @@ $("bulk-delete").addEventListener("click", async () => {
   showToast(`Deleted ${ids.length} bookmark(s).`);
   if (selectedFolderId) renderBookmarkList(selectedFolderId);
   renderFolderTree();
+});
+
+// --- Tag input on bookmark rows ---
+$("bookmark-list").addEventListener("click", async (e) => {
+  const removeBtn = e.target.closest(".tag-remove");
+  if (removeBtn) {
+    const bmId = removeBtn.dataset.bmId;
+    const tag = removeBtn.dataset.tag;
+    await removeTag(bmId, tag);
+    invalidateData();
+    if (selectedFolderId) renderBookmarkList(selectedFolderId);
+    return;
+  }
+});
+
+$("bookmark-list").addEventListener("keydown", async (e) => {
+  const input = e.target.closest(".tag-add-input");
+  if (!input) return;
+  const wrap = input.closest(".tag-input-wrap");
+  const dropdown = wrap.querySelector(".tag-autocomplete");
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const tag = input.value.trim().toLowerCase();
+    if (!tag) return;
+    const bmId = input.dataset.bmId;
+    await addTag(bmId, tag);
+    invalidateData();
+    input.value = "";
+    if (dropdown) dropdown.classList.remove("visible");
+    if (selectedFolderId) renderBookmarkList(selectedFolderId);
+  }
+  if (e.key === "Escape") {
+    input.value = "";
+    if (dropdown) dropdown.classList.remove("visible");
+    input.blur();
+  }
+});
+
+$("bookmark-list").addEventListener("input", async (e) => {
+  const input = e.target.closest(".tag-add-input");
+  if (!input) return;
+  const wrap = input.closest(".tag-input-wrap");
+  const dropdown = wrap.querySelector(".tag-autocomplete");
+  const query = input.value.trim().toLowerCase();
+
+  if (!query) {
+    dropdown.classList.remove("visible");
+    return;
+  }
+
+  const allTags = await getAllUniqueTags();
+  const matches = allTags.filter((t) => t.toLowerCase().includes(query));
+  if (matches.length === 0) {
+    dropdown.classList.remove("visible");
+    return;
+  }
+
+  dropdown.innerHTML = "";
+  matches.slice(0, 8).forEach((tag) => {
+    const opt = document.createElement("div");
+    opt.textContent = tag;
+    opt.addEventListener("mousedown", async (ev) => {
+      ev.preventDefault();
+      const bmId = input.dataset.bmId;
+      await addTag(bmId, tag);
+      invalidateData();
+      input.value = "";
+      dropdown.classList.remove("visible");
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+    });
+    dropdown.appendChild(opt);
+  });
+  dropdown.classList.add("visible");
+});
+
+$("bookmark-list").addEventListener("focusout", (e) => {
+  const input = e.target.closest(".tag-add-input");
+  if (!input) return;
+  const wrap = input.closest(".tag-input-wrap");
+  const dropdown = wrap.querySelector(".tag-autocomplete");
+  setTimeout(() => dropdown.classList.remove("visible"), 150);
+});
+
+// --- Settings modal ---
+$("settings-btn").addEventListener("click", () => {
+  $("settings-modal").classList.add("visible");
+  renderPriorityList();
+});
+$("settings-close").addEventListener("click", () => {
+  $("settings-modal").classList.remove("visible");
+});
+$("settings-modal").addEventListener("click", (e) => {
+  if (e.target === $("settings-modal")) $("settings-modal").classList.remove("visible");
+});
+
+async function renderPriorityList() {
+  const tags = await loadPriorityTags();
+  const container = $("priority-list");
+  container.innerHTML = "";
+  if (tags.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">No priority tags set.</div>';
+    return;
+  }
+  tags.forEach((tag, i) => {
+    const item = document.createElement("div");
+    item.className = "priority-item";
+    item.innerHTML = `
+      <span>${i + 1}.</span>
+      <span style="flex:1">${escapeHtml(tag)}</span>
+      <span class="remove-priority" data-tag="${escapeHtml(tag)}">✕</span>
+    `;
+    container.appendChild(item);
+  });
+}
+
+$("priority-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".remove-priority");
+  if (!btn) return;
+  const tag = btn.dataset.tag;
+  const tags = await loadPriorityTags();
+  await savePriorityTags(tags.filter((t) => t !== tag));
+  renderPriorityList();
+});
+
+$("add-priority-btn").addEventListener("click", async () => {
+  const input = $("priority-input");
+  const tag = input.value.trim().toLowerCase();
+  if (!tag) return;
+  const tags = await loadPriorityTags();
+  if (tags.includes(tag)) {
+    showToast("Tag already in priority list.");
+    return;
+  }
+  tags.push(tag);
+  await savePriorityTags(tags);
+  input.value = "";
+  renderPriorityList();
+});
+
+$("priority-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $("add-priority-btn").click();
+  }
+});
+
+// --- Bulk tag ---
+$("bulk-tag").addEventListener("click", async () => {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  const tag = prompt("Enter tag to add to selected bookmarks:");
+  if (!tag || !tag.trim()) return;
+  const cleaned = tag.trim().toLowerCase();
+  for (const id of ids) {
+    await addTag(id, cleaned);
+  }
+  invalidateData();
+  showToast(`Tagged ${ids.length} bookmark(s) with "${cleaned}".`);
+  if (selectedFolderId) renderBookmarkList(selectedFolderId);
 });
 
 // --- Init ---

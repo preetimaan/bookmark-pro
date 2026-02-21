@@ -200,15 +200,110 @@
     a.bookmark-url:hover { color: var(--accent); text-decoration: underline; }
     .bookmark-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .tag-pill {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       background: var(--tag-bg);
       color: var(--tag-text);
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 0.75rem;
+      cursor: default;
+    }
+    .tag-pill .tag-remove {
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 0.85em;
+      line-height: 1;
+    }
+    .tag-pill .tag-remove:hover { opacity: 1; }
+    .tag-input-wrap {
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+    }
+    .tag-input-wrap input {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      width: 80px;
+      outline: none;
+    }
+    .tag-input-wrap input:focus { border-color: var(--accent); }
+    .tag-input-wrap input::placeholder { color: var(--muted); }
+    .tag-autocomplete {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      max-height: 120px;
+      overflow-y: auto;
+      z-index: 50;
+      display: none;
+      min-width: 120px;
+    }
+    .tag-autocomplete.visible { display: block; }
+    .tag-autocomplete div {
+      padding: 4px 10px;
+      font-size: 0.8rem;
       cursor: pointer;
     }
-    .tag-pill:hover { background: var(--accent); color: white; }
+    .tag-autocomplete div:hover { background: rgba(74, 124, 186, 0.2); }
+
+    /* Settings modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 480px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal h2 { font-size: 1.1rem; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 0.9rem; margin-bottom: 4px; color: var(--muted); }
+    .modal input[type="text"] {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      margin-bottom: 12px;
+    }
+    .modal input[type="text"]:focus { border-color: var(--accent); }
+    .modal .priority-list { margin-bottom: 12px; }
+    .modal .priority-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 0.9rem;
+    }
+    .modal .priority-item .remove-priority {
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .modal .priority-item .remove-priority:hover { color: #e74c3c; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
     .bookmark-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
 
     .bottom-bar {
@@ -468,6 +563,22 @@
       <div id="broken-results" class="results"></div>
       <div id="broken-actions" style="display: none; margin-top: 12px;">
         <button type="button" class="primary" id="broken-delete">Delete selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-backdrop" id="settings-modal">
+    <div class="modal">
+      <h2>Settings</h2>
+      <label>Priority tags (shown first, in this order)</label>
+      <div class="priority-list" id="priority-list"></div>
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <input type="text" id="priority-input" placeholder="Add priority tag…" style="flex:1; margin-bottom:0;" />
+        <button type="button" class="primary" id="add-priority-btn" style="padding:8px 14px;">Add</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="primary" id="settings-close">Close</button>
       </div>
     </div>
   </div>
