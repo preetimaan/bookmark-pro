@@ -304,6 +304,14 @@
     }
     .modal .priority-item .remove-priority:hover { color: #e74c3c; }
     .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .move-tree-item {
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-radius: 4px;
+    }
+    .move-tree-item:hover { background: rgba(255,255,255,0.04); }
+    .move-tree-item.selected { background: rgba(74, 124, 186, 0.2); }
     .bookmark-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
 
     .bottom-bar {
@@ -454,6 +462,9 @@
     </div>
     <div class="main-area">
       <div class="main-toolbar">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--muted);">
+          <input type="checkbox" id="select-all-bm" /> Select all
+        </label>
         <input type="text" id="search-input" placeholder="Search bookmarks..." />
       </div>
       <div class="bookmark-list" id="bookmark-list">
@@ -563,6 +574,18 @@
       <div id="broken-results" class="results"></div>
       <div id="broken-actions" style="display: none; margin-top: 12px;">
         <button type="button" class="primary" id="broken-delete">Delete selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move-to modal -->
+  <div class="modal-backdrop" id="move-modal">
+    <div class="modal">
+      <h2>Move to folder</h2>
+      <div id="move-folder-tree" style="max-height:300px; overflow-y:auto; margin-bottom:16px;"></div>
+      <div class="modal-actions">
+        <button type="button" class="small" id="move-cancel">Cancel</button>
+        <button type="button" class="primary" id="move-confirm">Move here</button>
       </div>
     </div>
   </div>

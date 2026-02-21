@@ -250,7 +250,19 @@ function updateSelectionCount() {
   const ids = getSelectedIds();
   $("selection-count").textContent = `${ids.length} selected`;
   $("bottom-bar").classList.toggle("visible", ids.length > 0);
+  const allCbs = document.querySelectorAll('#bookmark-list input[data-bm-id]');
+  $("select-all-bm").checked = allCbs.length > 0 && ids.length === allCbs.length;
 }
+
+// --- Select all ---
+$("select-all-bm").addEventListener("change", function () {
+  document.querySelectorAll('#bookmark-list input[data-bm-id]').forEach((cb) => {
+    cb.checked = this.checked;
+    const row = cb.closest(".bookmark-row");
+    if (row) row.classList.toggle("selected", cb.checked);
+  });
+  updateSelectionCount();
+});
 
 // --- Bulk delete ---
 $("bulk-delete").addEventListener("click", async () => {
@@ -409,6 +421,61 @@ $("priority-input").addEventListener("keydown", (e) => {
     e.preventDefault();
     $("add-priority-btn").click();
   }
+});
+
+// --- Bulk move ---
+let moveTargetId = null;
+
+$("bulk-move").addEventListener("click", async () => {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  moveTargetId = null;
+  const { tree } = await ensureData();
+  const container = $("move-folder-tree");
+  container.innerHTML = "";
+  renderMoveFolderTree(container, tree, 0);
+  $("move-modal").classList.add("visible");
+});
+
+function renderMoveFolderTree(container, node, depth) {
+  if (node.children) {
+    for (const child of node.children) {
+      if (!child.children) continue;
+      const div = document.createElement("div");
+      div.className = "move-tree-item";
+      div.style.paddingLeft = (12 + depth * 20) + "px";
+      div.textContent = child.title || "Bookmarks";
+      div.dataset.folderId = child.id;
+      div.addEventListener("click", () => {
+        container.querySelectorAll(".move-tree-item").forEach((d) => d.classList.remove("selected"));
+        div.classList.add("selected");
+        moveTargetId = child.id;
+      });
+      container.appendChild(div);
+      renderMoveFolderTree(container, child, depth + 1);
+    }
+  }
+}
+
+$("move-cancel").addEventListener("click", () => {
+  $("move-modal").classList.remove("visible");
+});
+
+$("move-modal").addEventListener("click", (e) => {
+  if (e.target === $("move-modal")) $("move-modal").classList.remove("visible");
+});
+
+$("move-confirm").addEventListener("click", async () => {
+  if (!moveTargetId) { showToast("Select a folder first."); return; }
+  const ids = getSelectedIds();
+  for (const id of ids) {
+    await chrome.bookmarks.move(id, { parentId: moveTargetId });
+  }
+  invalidateData();
+  $("move-modal").classList.remove("visible");
+  showToast(`Moved ${ids.length} bookmark(s).`);
+  renderFolderTree();
+  if (selectedFolderId) renderBookmarkList(selectedFolderId);
 });
 
 // --- Bulk tag ---
