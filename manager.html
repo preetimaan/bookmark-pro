@@ -6,18 +6,22 @@
   <title>Bookmark Pro</title>
   <style>
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --border: #0f3460;
-      --text: #e8e8e8;
-      --muted: #a0a0a0;
-      --accent: #4a7cba;
-      --accent-hover: #5d8fd4;
-      --success: #4ecca3;
-      --warning-bg: rgba(74, 124, 186, 0.12);
-      --warning-border: #3d6a9e;
-      --tag-bg: #0f3460;
-      --tag-text: #a0c4f0;
+      color-scheme: light dark;
+      --bg: light-dark(#f8f9fa, #1a1a2e);
+      --surface: light-dark(#ffffff, #16213e);
+      --border: light-dark(#dde1e6, #0f3460);
+      --text: light-dark(#1c1c1e, #e8e8e8);
+      --muted: light-dark(#6e6e73, #a0a0a0);
+      --accent: light-dark(#1a73e8, #4a7cba);
+      --accent-hover: light-dark(#1765cc, #5d8fd4);
+      --success: light-dark(#188038, #4ecca3);
+      --warning-bg: light-dark(rgba(26, 115, 232, 0.08), rgba(74, 124, 186, 0.12));
+      --warning-border: light-dark(#a8c7fa, #3d6a9e);
+      --tag-bg: light-dark(#e8f0fe, #0f3460);
+      --tag-text: light-dark(#1a73e8, #a0c4f0);
+      --hover-bg: light-dark(rgba(0,0,0,0.04), rgba(255,255,255,0.04));
+      --selected-bg: light-dark(rgba(26, 115, 232, 0.1), rgba(74, 124, 186, 0.15));
+      --row-selected-bg: light-dark(rgba(26, 115, 232, 0.08), rgba(74, 124, 186, 0.12));
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -96,8 +100,8 @@
       font-size: 0.9rem;
       border-left: 3px solid transparent;
     }
-    .folder-tree .folder-row:hover { background: rgba(255,255,255,0.04); }
-    .folder-tree .folder-row.selected { background: rgba(74, 124, 186, 0.15); border-left-color: var(--accent); }
+    .folder-tree .folder-row:hover { background: var(--hover-bg); }
+    .folder-tree .folder-row.selected { background: var(--selected-bg); border-left-color: var(--accent); }
     .folder-tree .folder-row .arrow {
       width: 16px;
       text-align: center;
@@ -162,16 +166,24 @@
       overflow-y: auto;
       padding: 0;
     }
-    .bookmark-row {
+    .bookmark-row, .folder-entry {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 20px;
-      border-bottom: 1px solid var(--border);
+      padding: 8px 20px;
+      border-radius: 8px;
+      margin: 2px 8px;
       font-size: 0.9rem;
     }
-    .bookmark-row:hover { background: rgba(255,255,255,0.03); }
-    .bookmark-row.selected { background: rgba(74, 124, 186, 0.12); }
+    .bookmark-row:hover, .folder-entry:hover { background: var(--hover-bg); }
+    .bookmark-row.selected { background: var(--row-selected-bg); }
+    .folder-entry {
+      cursor: pointer;
+      color: var(--text);
+    }
+    .folder-entry .folder-icon { color: var(--muted); flex-shrink: 0; display: inline-flex; align-items: center; }
+    .folder-entry .folder-icon svg { width: 20px; height: 20px; }
+    .folder-entry .folder-entry-name { font-weight: 500; }
     .bookmark-row input[type="checkbox"] { flex-shrink: 0; }
     .bookmark-info { flex: 1; min-width: 0; }
     .bookmark-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
@@ -253,7 +265,7 @@
       font-size: 0.8rem;
       cursor: pointer;
     }
-    .tag-autocomplete div:hover { background: rgba(74, 124, 186, 0.2); }
+    .tag-autocomplete div:hover { background: var(--selected-bg); }
 
     /* Settings modal */
     .modal-backdrop {
@@ -310,8 +322,8 @@
       font-size: 0.9rem;
       border-radius: 4px;
     }
-    .move-tree-item:hover { background: rgba(255,255,255,0.04); }
-    .move-tree-item.selected { background: rgba(74, 124, 186, 0.2); }
+    .move-tree-item:hover { background: var(--hover-bg); }
+    .move-tree-item.selected { background: var(--selected-bg); }
     .bookmark-date { color: var(--muted); font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; }
 
     .bottom-bar {
@@ -331,6 +343,41 @@
       text-align: center;
       padding: 48px 24px;
       font-size: 0.95rem;
+    }
+
+    /* --- Tags view --- */
+    .tag-manager-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin: 2px 0;
+      font-size: 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .tag-manager-row:hover { background: var(--hover-bg); }
+    .tag-manager-row .tag-pill-display {
+      min-width: 80px;
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      color: #fff;
+    }
+    .tag-manager-row .tag-count { color: var(--muted); font-size: 0.85rem; margin-right: auto; }
+    .tag-manager-row .tag-actions { display: flex; gap: 6px; }
+    .tags-busy {
+      position: absolute;
+      inset: 0;
+      background: var(--bg);
+      opacity: 0.9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      color: var(--muted);
+      z-index: 10;
     }
 
     /* --- Cleanup view (existing) --- */
@@ -393,10 +440,8 @@
       align-items: flex-start;
       gap: 10px;
       padding: 6px 0;
-      border-bottom: 1px solid var(--border);
       font-size: 0.9rem;
     }
-    .item:last-child { border-bottom: none; }
     .item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
     .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; text-decoration: none; display: block; }
     a.item-url:hover { color: var(--accent); text-decoration: underline; }
@@ -448,6 +493,7 @@
     <h1>Bookmark Pro</h1>
     <div class="top-tabs">
       <button type="button" data-view="bookmarks" class="active">Bookmarks</button>
+      <button type="button" data-view="tags">Tags</button>
       <button type="button" data-view="cleanup">Cleanup</button>
     </div>
     <div class="topbar-spacer"></div>
@@ -472,10 +518,23 @@
       </div>
       <div class="bottom-bar" id="bottom-bar">
         <span class="selection-count" id="selection-count">0 selected</span>
+        <button type="button" class="small" id="bulk-deselect">Deselect all</button>
         <button type="button" class="small" id="bulk-delete">Delete</button>
         <button type="button" class="small" id="bulk-move">Move to…</button>
         <button type="button" class="small" id="bulk-tag">Tag…</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Tags view -->
+  <div id="view-tags" class="view">
+    <div id="tags-content" style="padding: 24px; position: relative;">
+      <div id="tags-busy" class="tags-busy" style="display: none;">Updating bookmarks…</div>
+      <div class="main-toolbar" style="border-bottom: none; padding: 0 0 16px;">
+        <input type="text" id="new-tag-name" placeholder="New tag name…" style="max-width: 240px;" />
+        <button type="button" class="primary" id="tags-add-btn">Add tag</button>
+      </div>
+      <div id="tags-list" class="results"></div>
     </div>
   </div>
 

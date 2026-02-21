@@ -6,6 +6,24 @@
 let bookmarksData = null;
 let selectedFolderId = null;
 
+const FOLDER_OUTLINE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+
+function tagToStyle(tag) {
+  let h = 0;
+  const s = (tag || "").toString();
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h % 360);
+  const bg = `hsl(${hue}, 45%, 35%)`;
+  const text = "#fff";
+  return { background: bg, color: text };
+}
+
+function tagPillHtml(bmId, tag) {
+  const style = tagToStyle(tag);
+  const styleStr = `background:${style.background};color:${style.color}`;
+  return `<span class="tag-pill" style="${styleStr}">${escapeHtml(tag)}<span class="tag-remove" data-bm-id="${bmId}" data-tag="${escapeHtml(tag)}">✕</span></span>`;
+}
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -43,7 +61,15 @@ document.querySelectorAll(".top-tabs button").forEach((btn) => {
     document.querySelectorAll(".top-tabs button").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     btn.classList.add("active");
-    $("view-" + btn.dataset.view).classList.add("active");
+    const view = $("view-" + btn.dataset.view);
+    if (view) view.classList.add("active");
+    if (btn.dataset.view === "tags") {
+      renderTagsList();
+    } else if (btn.dataset.view === "bookmarks") {
+      invalidateData();
+      renderFolderTree();
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+    }
   });
 });
 
@@ -62,6 +88,34 @@ document.querySelectorAll("#cleanup-tabs button").forEach((btn) => {
 // =====================================================
 // BOOKMARKS VIEW: Folder tree + bookmark list
 // =====================================================
+
+const EXPANDED_FOLDERS_KEY = "bookmarkProExpandedFolders";
+
+function getExpandedFolderIds() {
+  try {
+    const raw = sessionStorage.getItem(EXPANDED_FOLDERS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function setExpandedFolderIds(ids) {
+  try {
+    sessionStorage.setItem(EXPANDED_FOLDERS_KEY, JSON.stringify([...ids]));
+  } catch (_) {}
+}
+
+function isFolderExpanded(folderId) {
+  return getExpandedFolderIds().has(folderId);
+}
+
+function setFolderExpanded(folderId, expanded) {
+  const ids = getExpandedFolderIds();
+  if (expanded) ids.add(folderId);
+  else ids.delete(folderId);
+  setExpandedFolderIds(ids);
+}
 
 async function renderFolderTree() {
   const { tree } = await ensureData();
@@ -84,11 +138,13 @@ function buildFolderNode(node) {
 
   const hasSubfolders = node.children.some((c) => c.children);
   const bookmarkCount = node.children.filter((c) => c.url).length;
+  const isMixed = hasSubfolders && bookmarkCount > 0;
+  const expanded = hasSubfolders && isFolderExpanded(node.id);
 
   row.innerHTML = `
-    <span class="arrow">${hasSubfolders ? "▶" : ""}</span>
+    <span class="arrow">${hasSubfolders ? (expanded ? "▼" : "▶") : ""}</span>
     <span class="folder-name">${escapeHtml(node.title || "Bookmarks")}</span>
-    <span class="folder-count">${bookmarkCount}</span>
+    <span class="folder-count">${isMixed || bookmarkCount === 0 ? "" : bookmarkCount}</span>
   `;
 
   row.addEventListener("click", (e) => {
@@ -100,6 +156,7 @@ function buildFolderNode(node) {
         const isOpen = subList.style.display !== "none";
         subList.style.display = isOpen ? "none" : "block";
         row.querySelector(".arrow").textContent = isOpen ? "▶" : "▼";
+        setFolderExpanded(node.id, !isOpen);
       }
     }
   });
@@ -109,7 +166,7 @@ function buildFolderNode(node) {
   const subFolders = node.children.filter((c) => c.children);
   if (subFolders.length > 0) {
     const ul = document.createElement("ul");
-    ul.style.display = "none";
+    ul.style.display = expanded ? "block" : "none";
     for (const child of subFolders) {
       ul.appendChild(buildFolderNode(child));
     }
@@ -129,16 +186,36 @@ function selectFolder(folderId) {
 
 async function renderBookmarkList(folderId) {
   const children = await chrome.bookmarks.getChildren(folderId);
+  const folders = children.filter((c) => !c.url);
   const bookmarks = children.filter((c) => c.url);
   const container = $("bookmark-list");
   const allTags = await loadAllTags();
 
-  if (bookmarks.length === 0) {
-    container.innerHTML = '<div class="empty-state">No bookmarks in this folder.</div>';
+  if (folders.length === 0 && bookmarks.length === 0) {
+    container.innerHTML = '<div class="empty-state">This folder is empty.</div>';
     return;
   }
 
   container.innerHTML = "";
+
+  for (const folder of folders) {
+    const entry = document.createElement("div");
+    entry.className = "folder-entry";
+    entry.dataset.folderId = folder.id;
+    entry.innerHTML = `
+      <span class="folder-icon" aria-hidden="true">${FOLDER_OUTLINE_SVG}</span>
+      <span class="folder-entry-name">${escapeHtml(folder.title)}</span>
+    `;
+    entry.addEventListener("click", () => {
+      selectFolder(folder.id);
+      const treeRow = document.querySelector(`.folder-row[data-folder-id="${folder.id}"]`);
+      if (treeRow) {
+        treeRow.click();
+      }
+    });
+    container.appendChild(entry);
+  }
+
   for (const bm of bookmarks) {
     const { baseTitle } = parseTitle(bm.title);
     const tags = allTags[bm.id] || [];
@@ -147,9 +224,7 @@ async function renderBookmarkList(folderId) {
     const row = document.createElement("div");
     row.className = "bookmark-row";
     row.dataset.id = bm.id;
-    const tagPills = tags.map((t) =>
-      `<span class="tag-pill">${escapeHtml(t)}<span class="tag-remove" data-bm-id="${bm.id}" data-tag="${escapeHtml(t)}">✕</span></span>`
-    ).join("");
+    const tagPills = tags.map((t) => tagPillHtml(bm.id, t)).join("");
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
@@ -233,7 +308,9 @@ $("bookmark-list").addEventListener("dblclick", (e) => {
 });
 
 // --- Selection ---
+let selectAllInProgress = false;
 $("bookmark-list").addEventListener("change", (e) => {
+  if (selectAllInProgress) return;
   if (e.target.matches('input[data-bm-id]')) {
     const row = e.target.closest(".bookmark-row");
     if (row) row.classList.toggle("selected", e.target.checked);
@@ -254,12 +331,31 @@ function updateSelectionCount() {
   $("select-all-bm").checked = allCbs.length > 0 && ids.length === allCbs.length;
 }
 
-// --- Select all ---
+// --- Select all (toggle: select all or deselect all) ---
 $("select-all-bm").addEventListener("change", function () {
-  document.querySelectorAll('#bookmark-list input[data-bm-id]').forEach((cb) => {
-    cb.checked = this.checked;
+  selectAllInProgress = true;
+  const allCbs = document.querySelectorAll('#bookmark-list input[data-bm-id]');
+  const allChecked = allCbs.length > 0 && Array.from(allCbs).every((cb) => cb.checked);
+  const newState = !allChecked;
+  allCbs.forEach((cb) => {
+    cb.checked = newState;
     const row = cb.closest(".bookmark-row");
-    if (row) row.classList.toggle("selected", cb.checked);
+    if (row) row.classList.toggle("selected", newState);
+  });
+  $("select-all-bm").checked = newState;
+  updateSelectionCount();
+  requestAnimationFrame(() => {
+    selectAllInProgress = false;
+    $("select-all-bm").checked = allCbs.length > 0 && Array.from(allCbs).every((cb) => cb.checked);
+  });
+});
+
+// --- Deselect all ---
+$("bulk-deselect").addEventListener("click", () => {
+  document.querySelectorAll('#bookmark-list input[data-bm-id]:checked').forEach((cb) => {
+    cb.checked = false;
+    const row = cb.closest(".bookmark-row");
+    if (row) row.classList.remove("selected");
   });
   updateSelectionCount();
 });
@@ -423,6 +519,86 @@ $("priority-input").addEventListener("keydown", (e) => {
   }
 });
 
+// --- Tags tab ---
+async function renderTagsList() {
+  const tags = await getAllTagsForManager();
+  const container = $("tags-list");
+  if (!container) return;
+  if (tags.length === 0) {
+    container.innerHTML = '<div class="empty-state">No tags yet. Add a tag name above or tag bookmarks in the Bookmarks tab.</div>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const tag of tags) {
+    const count = await getTagCount(tag);
+    const style = tagToStyle(tag);
+    const row = document.createElement("div");
+    row.className = "tag-manager-row";
+    row.innerHTML = `
+      <span class="tag-pill-display" style="background:${style.background};color:${style.color}">${escapeHtml(tag)}</span>
+      <span class="tag-count">${count} bookmark(s)</span>
+      <span class="tag-actions">
+        <button type="button" class="small" data-tag-rename="${escapeHtml(tag)}">Rename</button>
+        <button type="button" class="small" data-tag-delete="${escapeHtml(tag)}">Delete</button>
+      </span>
+    `;
+    container.appendChild(row);
+  }
+}
+
+$("tags-add-btn").addEventListener("click", async () => {
+  const input = $("new-tag-name");
+  const tag = (input.value || "").trim().toLowerCase();
+  if (!tag) return;
+  await addKnownTag(tag);
+  input.value = "";
+  showToast(`Tag "${tag}" added. Add it to bookmarks from the Bookmarks tab.`);
+  renderTagsList();
+});
+
+document.getElementById("new-tag-name")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("tags-add-btn").click();
+});
+
+function setTagsBusy(show) {
+  const el = $("tags-busy");
+  if (el) el.style.display = show ? "flex" : "none";
+}
+
+$("tags-list").addEventListener("click", async (e) => {
+  const renameBtn = e.target.closest("[data-tag-rename]");
+  const deleteBtn = e.target.closest("[data-tag-delete]");
+  if (renameBtn) {
+    const oldTag = renameBtn.dataset.tagRename;
+    const newTag = (prompt("Rename tag to:", oldTag) || "").trim().toLowerCase();
+    if (!newTag || newTag === oldTag) return;
+    setTagsBusy(true);
+    try {
+      await renameTagGlobally(oldTag, newTag);
+      invalidateData();
+      if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+      renderTagsList();
+      showToast(`Renamed "${oldTag}" to "${newTag}".`);
+    } finally {
+      setTagsBusy(false);
+    }
+  } else if (deleteBtn) {
+    const tag = deleteBtn.dataset.tagDelete;
+    const count = await getTagCount(tag);
+    if (!confirm(`Remove tag "${tag}" from ${count} bookmark(s)?`)) return;
+    setTagsBusy(true);
+    try {
+      await deleteTagGlobally(tag);
+      invalidateData();
+      if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+      renderTagsList();
+      showToast(`Deleted tag "${tag}".`);
+    } finally {
+      setTagsBusy(false);
+    }
+  }
+});
+
 // --- Bulk move ---
 let moveTargetId = null;
 
@@ -532,9 +708,7 @@ async function searchBookmarks(query) {
     const { baseTitle } = parseTitle(bm.title);
     const tags = allTags[bm.id] || [];
     const dateStr = bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString() : "";
-    const tagPills = tags.map((t) =>
-      `<span class="tag-pill">${escapeHtml(t)}<span class="tag-remove" data-bm-id="${bm.id}" data-tag="${escapeHtml(t)}">✕</span></span>`
-    ).join("");
+    const tagPills = tags.map((t) => tagPillHtml(bm.id, t)).join("");
 
     const row = document.createElement("div");
     row.className = "bookmark-row";
