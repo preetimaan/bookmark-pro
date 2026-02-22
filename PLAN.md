@@ -105,10 +105,11 @@ Chrome extension for cleaning bookmarks: duplicates, empty folders, mergeable fo
 - **Safety:** Optional permission; explain in UI (“This feature needs access to open links to check them”). Don’t run automatically; user clicks “Check broken links.”
 - **Deceptive site warning:** If Chrome shows “deceptive site” etc., document that user can disable that check in Chrome settings or remove the flagged bookmark manually.
 
-### V3 sort details
+### V3 sort details (implemented)
 
-- **Options:** Sort by title (A–Z), date added (newest/oldest), URL. Scope: “This folder” vs “All bookmarks” (recursive).
-- **UI:** Section “Sort” with dropdown (by what, order) and “Sort” button; optional “Sort all folders recursively.”
+- **Options:** Sort by title (A–Z), date added (newest/oldest), URL. Scope: current folder.
+- **UI:** Sort dropdown in Bookmarks toolbar; applies **permanently** via `chrome.bookmarks.move` (reorders children in Chrome).
+- **Tags in titles:** Implemented with `#tag1 #tag2 Base Title` format; priority tags (1–3) first, then alphabetical. Tags tab: priority section (↑/↓, Remove), “Add to priority,” inline rename, search.
 
 ### V3 implementation order
 
@@ -139,6 +140,14 @@ bookmark-cleanup-extension/
 ```
 
 - No remote server; all logic and data local.
+
+---
+
+## Tags and title format (implemented)
+
+- **Title format:** `#tag1 #tag2 Base Title`. Tags at start with `#` prefix; add/remove tag updates bookmark title. Legacy `Title [tag1, tag2]` still parsed.
+- **Priority:** Up to 3 priority tags (1–3) in Tags tab; order by ↑/↓; “Add to priority” / “Remove.” Priority order used when building title.
+- **Tags tab UI:** Priority section (with note), search + add-new-tag on one line, “All tags” with search filter; inline rename (click tag name), Delete, Add to priority.
 
 ---
 

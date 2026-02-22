@@ -237,9 +237,9 @@ async function renderBookmarkList(folderId) {
   }
 
   for (const bm of bookmarks) {
-    const { baseTitle } = parseTitle(bm.title);
     const tags = allTags[bm.id] || [];
     const dateStr = bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString() : "";
+    const displayTitle = (typeof bm.title === "string" && bm.title) ? bm.title : "Bookmark";
 
     const row = document.createElement("div");
     row.className = "bookmark-row";
@@ -248,7 +248,7 @@ async function renderBookmarkList(folderId) {
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
-        <div class="bookmark-title">${escapeHtml(baseTitle)}</div>
+        <div class="bookmark-title" data-base-title="${escapeHtml(parseTitle(bm.title).baseTitle)}">${escapeHtml(displayTitle)}</div>
         <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
         <div class="bookmark-tags">
           ${tagPills}
@@ -277,6 +277,10 @@ $("bookmark-list").addEventListener("dblclick", (e) => {
   if (!row) return;
   const bmId = row.dataset.id;
 
+  if (titleEl) {
+    const base = titleEl.getAttribute("data-base-title");
+    if (base != null) titleEl.textContent = base;
+  }
   target.setAttribute("contenteditable", "true");
   target.classList.add("editing");
   target.focus();

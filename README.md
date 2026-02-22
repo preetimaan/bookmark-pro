@@ -25,6 +25,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 - **Tags** — Add/remove tags per bookmark; pills use a hash-based color. Autocomplete from existing tags.
 - **Multi-select** — Select all, deselect all, bulk delete, move to folder, bulk tag.
 - **Search** — Filters by title, URL, or tag across all bookmarks.
+- **Sort** — Dropdown: title A–Z/Z–A, date newest/oldest, URL A–Z/Z–A. Sort is **permanent** (reorders bookmarks in Chrome via `chrome.bookmarks.move`).
 
 ### Tags tab
 
@@ -42,10 +43,6 @@ Reload the extension after code changes (refresh icon on the extension card). No
 - **Similar folders** — Same-name folders anywhere in the tree; merge into one.
 - **Broken links** — Check for 404, 403, timeouts, etc. (requests `<all_urls>` when used). HEAD then GET retry with delay.
 
-### Settings (gear icon)
-
-- **Priority tags** — Define order; these appear first in bookmark titles and in tag lists.
-
 ### Theme
 
 - Follows system light/dark. Neutral black/gray palette (no blue accent).
@@ -62,9 +59,10 @@ Reload the extension after code changes (refresh icon on the extension card). No
 |                 | Tags on bookmarks, pills, +tag   | Done   |
 |                 | Multi-select, bulk delete/move/tag | Done |
 |                 | Search (title, URL, tag)         | Done   |
+|                 | Permanent sort (folder)         | Done   |
 | **Tags**        | Tags tab, add/rename/delete      | Done   |
-|                 | Title encoding `Title [tag1, tag2]` | Done |
-|                 | storage.sync, priority tags      | Done   |
+|                 | Title encoding `#tag1 #tag2 Title` | Done  |
+|                 | storage.sync, priority (1–3), search, inline rename | Done |
 |                 | Filter by tag                    | Via search |
 | **Cleanup**     | Duplicates, empty, merge         | Done   |
 |                 | Similar URLs, similar folders    | Done   |
@@ -102,8 +100,8 @@ bookmark-pro/
 
 ## Tag system (short)
 
-- **Storage:** `chrome.storage.sync` holds `{ bookmarkId: ["tag1", "tag2"] }`.
-- **Title:** Tags are appended as `Page Title [tag1, tag2]`. Priority tags first (from settings), then the rest alphabetically.
+- **Storage:** `chrome.storage.sync` holds `{ bookmarkId: ["tag1", "tag2"] }` and a priority map (up to 3 tags with order 1–3).
+- **Title:** Tags are written at the **start** of the title with a `#` prefix: `#tag1 #tag2 Base Title`. Order: priority tags (1–3) first, then the rest alphabetically. Adding/removing a tag updates the bookmark title; legacy format `Title [tag1, tag2]` is still parsed.
 - **Sync:** Add/remove/rename/delete tag updates storage and rewrites the bookmark title so Chrome’s native UI and other devices see the same tags.
 
 ---
