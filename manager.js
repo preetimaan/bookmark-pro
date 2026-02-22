@@ -5,6 +5,7 @@
 
 let bookmarksData = null;
 let selectedFolderId = null;
+let bookmarkSort = "title-asc";
 
 const FOLDER_OUTLINE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
 
@@ -184,12 +185,31 @@ function selectFolder(folderId) {
   renderBookmarkList(folderId);
 }
 
+function applyBookmarkSort(items, allTags) {
+  const sorted = [...items];
+  const getBase = (bm) => parseTitle(bm.title).baseTitle;
+  const cmp = (a, b) => {
+    switch (bookmarkSort) {
+      case "title-asc": return getBase(a).localeCompare(getBase(b));
+      case "title-desc": return getBase(b).localeCompare(getBase(a));
+      case "date-desc": return (b.dateAdded || 0) - (a.dateAdded || 0);
+      case "date-asc": return (a.dateAdded || 0) - (b.dateAdded || 0);
+      case "url-asc": return (a.url || "").localeCompare(b.url || "");
+      case "url-desc": return (b.url || "").localeCompare(a.url || "");
+      default: return getBase(a).localeCompare(getBase(b));
+    }
+  };
+  sorted.sort(cmp);
+  return sorted;
+}
+
 async function renderBookmarkList(folderId) {
   const children = await chrome.bookmarks.getChildren(folderId);
   const folders = children.filter((c) => !c.url);
-  const bookmarks = children.filter((c) => c.url);
+  let bookmarks = children.filter((c) => c.url);
   const container = $("bookmark-list");
   const allTags = await loadAllTags();
+  bookmarks = applyBookmarkSort(bookmarks, allTags);
 
   if (folders.length === 0 && bookmarks.length === 0) {
     container.innerHTML = '<div class="empty-state">This folder is empty.</div>';
@@ -279,8 +299,8 @@ $("bookmark-list").addEventListener("dblclick", (e) => {
     try {
       if (titleEl) {
         const tags = await getTagsForBookmark(bmId);
-        const priorityTags = await loadPriorityTags();
-        const newTitle = buildTitle(newValue, tags, priorityTags);
+        const priorityMap = await loadPriorityMap();
+        const newTitle = buildTitle(newValue, tags, priorityMap);
         await chrome.bookmarks.update(bmId, { title: newTitle });
       } else {
         await chrome.bookmarks.update(bmId, { url: newValue });
@@ -456,95 +476,87 @@ $("bookmark-list").addEventListener("focusout", (e) => {
   setTimeout(() => dropdown.classList.remove("visible"), 150);
 });
 
-// --- Settings modal ---
-$("settings-btn").addEventListener("click", () => {
-  $("settings-modal").classList.add("visible");
-  renderPriorityList();
-});
-$("settings-close").addEventListener("click", () => {
-  $("settings-modal").classList.remove("visible");
-});
-$("settings-modal").addEventListener("click", (e) => {
-  if (e.target === $("settings-modal")) $("settings-modal").classList.remove("visible");
-});
-
-async function renderPriorityList() {
-  const tags = await loadPriorityTags();
-  const container = $("priority-list");
-  container.innerHTML = "";
-  if (tags.length === 0) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">No priority tags set.</div>';
-    return;
-  }
-  tags.forEach((tag, i) => {
-    const item = document.createElement("div");
-    item.className = "priority-item";
-    item.innerHTML = `
-      <span>${i + 1}.</span>
-      <span style="flex:1">${escapeHtml(tag)}</span>
-      <span class="remove-priority" data-tag="${escapeHtml(tag)}">✕</span>
-    `;
-    container.appendChild(item);
-  });
-}
-
-$("priority-list").addEventListener("click", async (e) => {
-  const btn = e.target.closest(".remove-priority");
-  if (!btn) return;
-  const tag = btn.dataset.tag;
-  const tags = await loadPriorityTags();
-  await savePriorityTags(tags.filter((t) => t !== tag));
-  renderPriorityList();
-});
-
-$("add-priority-btn").addEventListener("click", async () => {
-  const input = $("priority-input");
-  const tag = input.value.trim().toLowerCase();
-  if (!tag) return;
-  const tags = await loadPriorityTags();
-  if (tags.includes(tag)) {
-    showToast("Tag already in priority list.");
-    return;
-  }
-  tags.push(tag);
-  await savePriorityTags(tags);
-  input.value = "";
-  renderPriorityList();
-});
-
-$("priority-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    $("add-priority-btn").click();
-  }
-});
-
 // --- Tags tab ---
 async function renderTagsList() {
   const tags = await getAllTagsForManager();
+  const priorityMap = await loadPriorityMap();
+  const searchEl = $("tags-search");
+  const searchQuery = (searchEl && searchEl.value.trim().toLowerCase()) || "";
+  const filteredTags = searchQuery
+    ? tags.filter((t) => t.toLowerCase().includes(searchQuery))
+    : tags;
+
+  const priorityTagNames = Object.entries(priorityMap)
+    .sort((a, b) => a[1] - b[1])
+    .map(([name]) => name);
+
+  const prioritySection = $("tags-priority-section");
+  if (prioritySection) {
+    const priorityNote = "<p class=\"tags-priority-note\" style=\"font-size:0.8rem;color:var(--muted);margin:4px 0 10px 0;\">These tags appear first in bookmark titles. Use ↑↓ to reorder.</p>";
+    if (priorityTagNames.length === 0) {
+      prioritySection.innerHTML = "<h3>Priority tags (1–3)</h3>" + priorityNote + "<div class=\"empty-state\" style=\"padding:12px 0;font-size:0.9rem;\">No priority tags. Use \"Add to priority\" on any tag below.</div>";
+    } else {
+      prioritySection.innerHTML = "<h3>Priority tags (1–3)</h3>" + priorityNote;
+      for (let idx = 0; idx < priorityTagNames.length; idx++) {
+        const tag = priorityTagNames[idx];
+        const count = await getTagCount(tag);
+        const style = tagToStyle(tag);
+        const row = document.createElement("div");
+        row.className = "tag-manager-row";
+        row.innerHTML = `
+          <span class="tag-name-editable" data-tag-rename="${escapeHtml(tag)}" style="background:${style.background};color:${style.color}">${escapeHtml(tag)}</span>
+          <span class="tag-count">${count} bookmark(s)</span>
+          <span class="tag-actions">
+            <button type="button" class="small tag-btn-priority" data-tag-up="${escapeHtml(tag)}" title="Move up" ${idx === 0 ? "disabled" : ""}>↑</button>
+            <button type="button" class="small tag-btn-priority" data-tag-down="${escapeHtml(tag)}" title="Move down" ${idx === priorityTagNames.length - 1 ? "disabled" : ""}>↓</button>
+            <button type="button" class="small tag-btn-priority" data-tag-remove-priority="${escapeHtml(tag)}">Remove</button>
+            <button type="button" class="small" data-tag-delete="${escapeHtml(tag)}">Delete</button>
+          </span>
+        `;
+        prioritySection.appendChild(row);
+      }
+    }
+  }
+
   const container = $("tags-list");
   if (!container) return;
-  if (tags.length === 0) {
+  if (filteredTags.length === 0 && tags.length === 0) {
     container.innerHTML = '<div class="empty-state">No tags yet. Add a tag name above or tag bookmarks in the Bookmarks tab.</div>';
     return;
   }
-  container.innerHTML = "";
-  for (const tag of tags) {
+  if (filteredTags.length === 0) {
+    container.innerHTML = '<div class="empty-state">No tags match your search.</div>';
+    return;
+  }
+  container.innerHTML =
+    '<h3 style="font-size:0.9rem;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">All tags</h3>';
+  const canAddMorePriority = priorityTagNames.length < 3;
+  for (const tag of filteredTags) {
     const count = await getTagCount(tag);
     const style = tagToStyle(tag);
+    const isPriority = tag in priorityMap;
+    const showAddPriority = canAddMorePriority && !isPriority;
     const row = document.createElement("div");
     row.className = "tag-manager-row";
     row.innerHTML = `
-      <span class="tag-pill-display" style="background:${style.background};color:${style.color}">${escapeHtml(tag)}</span>
+      <span class="tag-name-editable" data-tag-rename="${escapeHtml(tag)}" style="background:${style.background};color:${style.color}">${escapeHtml(tag)}</span>
       <span class="tag-count">${count} bookmark(s)</span>
       <span class="tag-actions">
-        <button type="button" class="small" data-tag-rename="${escapeHtml(tag)}">Rename</button>
+        ${showAddPriority ? `<button type="button" class="small tag-btn-priority" data-tag-add-priority="${escapeHtml(tag)}">Add to priority</button>` : ""}
         <button type="button" class="small" data-tag-delete="${escapeHtml(tag)}">Delete</button>
       </span>
     `;
     container.appendChild(row);
   }
 }
+
+$("tags-search")?.addEventListener("input", () => renderTagsList());
+$("tags-search")?.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    $("tags-search").value = "";
+    renderTagsList();
+  }
+});
 
 $("tags-add-btn").addEventListener("click", async () => {
   const input = $("new-tag-name");
@@ -565,24 +577,115 @@ function setTagsBusy(show) {
   if (el) el.style.display = show ? "flex" : "none";
 }
 
-$("tags-list").addEventListener("click", async (e) => {
-  const renameBtn = e.target.closest("[data-tag-rename]");
+$("tags-content").addEventListener("click", async (e) => {
+  const addPriorityBtn = e.target.closest("[data-tag-add-priority]");
+  const upBtn = e.target.closest("[data-tag-up]");
+  const downBtn = e.target.closest("[data-tag-down]");
+  const removePriorityBtn = e.target.closest("[data-tag-remove-priority]");
+  const editableSpan = e.target.closest(".tag-name-editable");
   const deleteBtn = e.target.closest("[data-tag-delete]");
-  if (renameBtn) {
-    const oldTag = renameBtn.dataset.tagRename;
-    const newTag = (prompt("Rename tag to:", oldTag) || "").trim().toLowerCase();
-    if (!newTag || newTag === oldTag) return;
-    setTagsBusy(true);
-    try {
-      await renameTagGlobally(oldTag, newTag);
-      invalidateData();
-      if (selectedFolderId) await renderBookmarkList(selectedFolderId);
-      renderTagsList();
-      showToast(`Renamed "${oldTag}" to "${newTag}".`);
-    } finally {
-      setTagsBusy(false);
+
+  if (addPriorityBtn && !addPriorityBtn.disabled) {
+    const tag = addPriorityBtn.dataset.tagAddPriority;
+    const slot = await getNextPrioritySlot();
+    if (slot == null) {
+      showToast("Already 3 priority tags. Remove one first.");
+      return;
     }
-  } else if (deleteBtn) {
+    const { error } = await setTagPriority(tag, slot);
+    if (error) {
+      showToast(error);
+    } else {
+      showToast(`Added "${tag}" to priority.`);
+    }
+    invalidateData();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    renderTagsList();
+    return;
+  }
+
+  if (upBtn && !upBtn.disabled) {
+    const tag = upBtn.dataset.tagUp;
+    const { error } = await movePriority(tag, "up");
+    if (error) showToast(error);
+    else showToast(`Moved "${tag}" up.`);
+    invalidateData();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    renderTagsList();
+    return;
+  }
+
+  if (downBtn && !downBtn.disabled) {
+    const tag = downBtn.dataset.tagDown;
+    const { error } = await movePriority(tag, "down");
+    if (error) showToast(error);
+    else showToast(`Moved "${tag}" down.`);
+    invalidateData();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    renderTagsList();
+    return;
+  }
+
+  if (removePriorityBtn) {
+    const tag = removePriorityBtn.dataset.tagRemovePriority;
+    await setTagPriority(tag, null);
+    showToast(`Removed "${tag}" from priority.`);
+    invalidateData();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    renderTagsList();
+    return;
+  }
+
+  if (editableSpan && !editableSpan.closest(".tag-manager-row")?.querySelector(".tag-rename-input")) {
+    const oldTag = editableSpan.dataset.tagRename;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "tag-rename-input";
+    input.value = oldTag;
+    input.dataset.tagRename = oldTag;
+    editableSpan.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    const commit = async () => {
+      if (committed) return;
+      committed = true;
+      const newTag = input.value.trim().toLowerCase();
+      input.remove();
+      if (!newTag || newTag === oldTag) {
+        renderTagsList();
+        return;
+      }
+      setTagsBusy(true);
+      try {
+        await renameTagGlobally(oldTag, newTag);
+        invalidateData();
+        if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+        renderTagsList();
+        showToast(`Renamed to "${newTag}".`);
+      } catch (err) {
+        showToast(err.message || "Rename failed.");
+        renderTagsList();
+      } finally {
+        setTagsBusy(false);
+      }
+    };
+
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        commit();
+      } else if (ev.key === "Escape") {
+        input.remove();
+        renderTagsList();
+      }
+    });
+    input.addEventListener("blur", () => commit());
+    return;
+  }
+
+  if (deleteBtn) {
     const tag = deleteBtn.dataset.tagDelete;
     const count = await getTagCount(tag);
     if (!confirm(`Remove tag "${tag}" from ${count} bookmark(s)?`)) return;
@@ -669,6 +772,39 @@ $("bulk-tag").addEventListener("click", async () => {
   if (selectedFolderId) renderBookmarkList(selectedFolderId);
 });
 
+// --- Sort (permanent: reorder bookmarks in Chrome) ---
+const sortSelect = $("sort-bookmarks");
+if (sortSelect) {
+  sortSelect.value = bookmarkSort;
+  sortSelect.addEventListener("change", async () => {
+    bookmarkSort = sortSelect.value;
+    const query = $("search-input").value.trim().toLowerCase();
+    if (query) {
+      searchBookmarks(query);
+      return;
+    }
+    if (selectedFolderId) {
+      await applySortPermanently(selectedFolderId);
+      renderBookmarkList(selectedFolderId);
+    }
+  });
+}
+
+async function applySortPermanently(folderId) {
+  const children = await chrome.bookmarks.getChildren(folderId);
+  const folders = children.filter((c) => !c.url);
+  const bookmarks = children.filter((c) => c.url);
+  if (bookmarks.length === 0) return;
+  const allTags = await loadAllTags();
+  const sorted = applyBookmarkSort(bookmarks, allTags);
+  const baseIndex = folders.length;
+  for (let i = 0; i < sorted.length; i++) {
+    await chrome.bookmarks.move(sorted[i].id, { parentId: folderId, index: baseIndex + i });
+  }
+  invalidateData();
+  showToast("Folder sorted.");
+}
+
 // --- Search ---
 let searchTimeout = null;
 $("search-input").addEventListener("input", () => {
@@ -687,7 +823,7 @@ async function searchBookmarks(query) {
   const { bookmarks } = await ensureData();
   const allTags = await loadAllTags();
 
-  const results = bookmarks.filter((bm) => {
+  let results = bookmarks.filter((bm) => {
     const { baseTitle } = parseTitle(bm.title);
     const tags = allTags[bm.id] || [];
     return (
@@ -696,6 +832,7 @@ async function searchBookmarks(query) {
       tags.some((t) => t.toLowerCase().includes(query))
     );
   });
+  results = applyBookmarkSort(results, allTags);
 
   const container = $("bookmark-list");
   if (results.length === 0) {
@@ -732,6 +869,46 @@ async function searchBookmarks(query) {
   }
   updateSelectionCount();
 }
+
+// --- Keyboard shortcuts ---
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if ($("move-modal")?.classList.contains("visible")) {
+      $("move-modal").classList.remove("visible");
+      e.preventDefault();
+      return;
+    }
+    const ids = getSelectedIds();
+    if (ids.length > 0 && $("view-bookmarks")?.classList.contains("active")) {
+      document.querySelectorAll('#bookmark-list input[data-bm-id]:checked').forEach((cb) => {
+        cb.checked = false;
+        const row = cb.closest(".bookmark-row");
+        if (row) row.classList.remove("selected");
+      });
+      updateSelectionCount();
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.key === "Delete" || e.key === "Backspace") {
+    const active = document.activeElement;
+    const isInput = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+    if (isInput) return;
+    if ($("move-modal")?.classList.contains("visible")) return;
+    if (!$("view-bookmarks")?.classList.contains("active")) return;
+    const ids = getSelectedIds();
+    if (ids.length === 0) return;
+    e.preventDefault();
+    if (!confirm(`Delete ${ids.length} selected bookmark(s)? This cannot be undone.`)) return;
+    (async () => {
+      for (const id of ids) await chrome.bookmarks.remove(id);
+      invalidateData();
+      showToast(`Deleted ${ids.length} bookmark(s).`);
+      if (selectedFolderId) renderBookmarkList(selectedFolderId);
+      renderFolderTree();
+    })();
+  }
+});
 
 // --- Init ---
 renderFolderTree();

@@ -366,7 +366,23 @@
       color: #fff;
     }
     .tag-manager-row .tag-count { color: var(--muted); font-size: 0.85rem; margin-right: auto; }
-    .tag-manager-row .tag-actions { display: flex; gap: 6px; }
+    .tag-manager-row .tag-priority-wrap { display: flex; align-items: center; gap: 4px; }
+    .tag-manager-row .tag-priority-wrap input { width: 4em; text-align: center; padding: 4px; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+    .tag-manager-row .tag-priority-wrap label { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+    .tag-manager-row .tag-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag-manager-row .tag-name-editable {
+      min-width: 80px; padding: 4px 10px; border-radius: 10px; font-size: 0.8rem; color: #fff;
+      cursor: pointer; display: inline-block;
+    }
+    .tag-manager-row .tag-name-editable:hover { opacity: 0.9; }
+    .tag-manager-row .tag-rename-input {
+      min-width: 100px; padding: 4px 8px; font-size: 0.8rem; background: var(--surface);
+      border: 1px solid var(--accent); border-radius: 6px; color: var(--text); outline: none;
+    }
+    .tag-manager-row .tag-btn-priority { font-size: 0.75rem; padding: 4px 8px; }
+    .tags-subsection { }
+    .tags-subsection h3 { font-size: 0.9rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tags-subsection .tag-manager-row { margin-bottom: 4px; }
     .tags-busy {
       position: absolute;
       inset: 0;
@@ -497,7 +513,6 @@
       <button type="button" data-view="cleanup">Cleanup</button>
     </div>
     <div class="topbar-spacer"></div>
-    <button type="button" class="settings-btn" id="settings-btn">Settings</button>
   </div>
 
   <!-- Bookmarks view -->
@@ -511,6 +526,14 @@
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--muted);">
           <input type="checkbox" id="select-all-bm" /> Select all
         </label>
+        <select id="sort-bookmarks" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:0.85rem;">
+          <option value="title-asc">Title A–Z</option>
+          <option value="title-desc">Title Z–A</option>
+          <option value="date-desc">Date (newest)</option>
+          <option value="date-asc">Date (oldest)</option>
+          <option value="url-asc">URL A–Z</option>
+          <option value="url-desc">URL Z–A</option>
+        </select>
         <input type="text" id="search-input" placeholder="Search bookmarks..." />
       </div>
       <div class="bookmark-list" id="bookmark-list">
@@ -530,10 +553,17 @@
   <div id="view-tags" class="view">
     <div id="tags-content" style="padding: 24px; position: relative;">
       <div id="tags-busy" class="tags-busy" style="display: none;">Updating bookmarks…</div>
-      <div class="main-toolbar" style="border-bottom: none; padding: 0 0 16px;">
-        <input type="text" id="new-tag-name" placeholder="New tag name…" style="max-width: 240px;" />
-        <button type="button" class="primary" id="tags-add-btn">Add tag</button>
+      <div class="tags-toolbar" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 0 24px; margin-bottom: 16px;">
+        <span class="tags-search-wrap" style="display: inline-flex; align-items: center; gap: 8px;">
+          <input type="text" id="tags-search" placeholder="Search tags…" style="min-width: 160px; max-width: 280px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9rem;" />
+          <svg class="tags-search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: #f0c14b;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="text" id="new-tag-name" placeholder="New tag name…" style="max-width: 200px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9rem;" />
+          <button type="button" class="primary" id="tags-add-btn">Add tag</button>
+        </div>
       </div>
+      <div id="tags-priority-section" class="tags-subsection" style="margin-bottom: 20px;"></div>
       <div id="tags-list" class="results"></div>
     </div>
   </div>
