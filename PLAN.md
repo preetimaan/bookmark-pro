@@ -118,6 +118,16 @@ Chrome extension for cleaning bookmarks: duplicates, empty folders, mergeable fo
 
 ---
 
+## Recent UX (manager)
+
+- **Scope** — Cleanup scans can be limited to a folder: dropdown with tree-style list (indented). “All bookmarks” or pick a folder; only that subtree is scanned.
+- **Inline edit in cleanup** — Edit icon (✎) next to name and URL in duplicate/similar-URL/broken results; copy icon (⎘) next to name and URL. Double-click name also edits title.
+- **Rescan** — After edit or delete in cleanup, rescan is debounced (15s idle). No rescan if user only opens edit and cancels or saves without changing value.
+- **Delete flow** — After deleting from duplicate/similar/broken results: remove deleted rows from DOM; remove duplicate groups that have ≤1 item left; clear selections and hide bottom bar. Same for empty/merge/similar-folders.
+- **Layout** — Result items wrap (no horizontal scroll); edit/copy buttons in wrap.
+
+---
+
 ## Architecture (evolving)
 
 ```

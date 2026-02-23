@@ -20,8 +20,8 @@ Reload the extension after code changes (refresh icon on the extension card). No
 ### Bookmarks tab
 
 - **Folder tree** — Sidebar with expand/collapse (state kept when switching tabs).
-- **Main pane** — Shows subfolders and bookmarks for the selected folder. Mixed folders list both.
-- **Inline edit** — Double-click title or URL to edit; tags stay in sync.
+- **Main pane** — Shows subfolders and bookmarks for the selected folder. Mixed folders list both. Content wraps (no horizontal scroll). Content wraps (no horizontal scroll).
+- **Inline edit** — Double-click title or URL to edit, or click ✎ next to name or URL; tags stay in sync. **Copy** (⎘) next to name and URL to copy to clipboard.
 - **Tags** — Add/remove tags per bookmark; pills use a hash-based color. Autocomplete from existing tags.
 - **Multi-select** — Select all, deselect all, bulk delete, move to folder, bulk tag.
 - **Search** — Filters by title, URL, or tag across all bookmarks.
@@ -67,6 +67,9 @@ Reload the extension after code changes (refresh icon on the extension card). No
 | **Cleanup**     | Duplicates, empty, merge         | Done   |
 |                 | Similar URLs, similar folders    | Done   |
 |                 | Broken links                     | Done   |
+|                 | Scope (folder tree dropdown)     | Done   |
+|                 | Inline edit/copy in results     | Done   |
+|                 | 15s debounced rescan, clear selection after action | Done   |
 | **Future**      | Drag and drop reorder/move       | Pending |
 |                 | Create/rename/delete folders     | Pending |
 |                 | Import/export (JSON with tags)   | Pending |

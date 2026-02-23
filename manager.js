@@ -166,6 +166,16 @@ $("cleanup-deselect")?.addEventListener("click", () => {
   updateCleanupBottomBar();
 });
 
+function clearCleanupSelectionsAndHideBar() {
+  const activePanel = document.querySelector("#view-cleanup .panel.active");
+  if (activePanel) {
+    const container = activePanel.querySelector(".results");
+    if (container) container.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => { cb.checked = false; });
+    activePanel.querySelectorAll("input[data-dup-select-all], input[data-subset-select-all], input[data-broken-select-all]").forEach((cb) => { cb.checked = false; });
+  }
+  updateCleanupBottomBar();
+}
+
 $("view-cleanup")?.addEventListener("change", () => updateCleanupBottomBar());
 
 // =====================================================
@@ -1187,38 +1197,41 @@ renderFolderTree();
 /** Return folder ids that are the given folder or its descendants. If folderId is empty/null, return all folder ids. */
 function getCleanupScopeFolderIds(folderId, folders) {
   if (!folders || !folders.length) return new Set();
-  const allIds = new Set(folders.map((f) => f.id));
-  if (!folderId) return allIds;
+  const allIds = new Set(folders.map((f) => String(f.id)));
+  const id = folderId != null ? String(folderId).trim() : "";
+  if (!id || id === "0") return allIds;
   const byParent = {};
   folders.forEach((f) => {
-    if (!byParent[f.parentId]) byParent[f.parentId] = [];
-    byParent[f.parentId].push(f.id);
+    const pid = f.parentId != null ? String(f.parentId) : "";
+    if (!byParent[pid]) byParent[pid] = [];
+    byParent[pid].push(String(f.id));
   });
-  const result = new Set([folderId]);
-  let queue = [folderId];
+  const result = new Set([id]);
+  let queue = [id];
   while (queue.length) {
     const pid = queue.pop();
-    (byParent[pid] || []).forEach((id) => {
-      if (!result.has(id)) {
-        result.add(id);
-        queue.push(id);
+    (byParent[pid] || []).forEach((childId) => {
+      if (!result.has(childId)) {
+        result.add(childId);
+        queue.push(childId);
       }
     });
   }
   return result;
 }
 
-/** Build { id, path } for each folder from tree (excluding root). */
-function getFolderPathsFromTree(node, segments = []) {
+/** Build { value, label, depth } for each folder from tree (tree structure with depth for indent). */
+function getFolderPathsFromTree(node, depth = 0) {
   const list = [];
   if (!node || !node.children) return list;
-  const title = node.title || (node.id === "0" || node.id === "1" ? "Bookmarks" : "");
-  const segs = title ? [...segments, title] : segments;
-  if (node.id !== "0" && node.id !== "1") {
-    list.push({ id: node.id, path: segs.join(" / ") });
+  const isRoot = node.id === "0"; // Chrome root is "0"; "1" = Bookmarks bar, "2" = Other bookmarks
+  const label = (node.title || (isRoot ? "Bookmarks" : "")).trim() || "Folder";
+  if (!isRoot) {
+    list.push({ value: String(node.id), label, depth });
   }
+  const nextDepth = isRoot ? 0 : depth + 1;
   for (const c of node.children) {
-    if (c.children) list.push(...getFolderPathsFromTree(c, segs));
+    if (c.children) list.push(...getFolderPathsFromTree(c, nextDepth));
   }
   return list;
 }
@@ -1227,9 +1240,14 @@ async function populateCleanupScopeDropdown() {
   const sel = $("cleanup-scope-folder");
   if (!sel) return;
   const data = await ensureData();
-  const options = [{ value: "", path: "All bookmarks" }, ...getFolderPathsFromTree(data.tree)];
+  const treeOptions = getFolderPathsFromTree(data.tree);
+  const indentChar = "\u00A0\u00A0"; // two nbsp per level
+  const options = [
+    { value: "", label: "All bookmarks" },
+    ...treeOptions.map((o) => ({ value: o.value, label: indentChar.repeat(o.depth) + o.label })),
+  ];
   const current = sel.value;
-  sel.innerHTML = options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.path)}</option>`).join("");
+  sel.innerHTML = options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
   if (options.some((o) => o.value === current)) sel.value = current;
 }
 
@@ -1319,10 +1337,18 @@ $("dup-delete").addEventListener("click", async () => {
   const checked = document.querySelectorAll('input[data-dup-id]:checked');
   if (checked.length === 0) { showToast("Select at least one bookmark to delete."); return; }
   if (!confirm(`Delete ${checked.length} selected bookmark(s)? This cannot be undone.`)) return;
-  for (const el of checked) await chrome.bookmarks.remove(el.dataset.dupId);
+  for (const el of checked) {
+    el.closest(".item")?.remove();
+    await chrome.bookmarks.remove(el.dataset.dupId);
+  }
+  // Remove groups that have one or zero items left (no longer duplicates)
+  $("dup-results").querySelectorAll(".group").forEach((group) => {
+    if (group.querySelectorAll(".item").length <= 1) group.remove();
+  });
   invalidateData();
   showToast(`Deleted ${checked.length} bookmark(s).`);
-  $("scan-duplicates").click();
+  scheduleCleanupRescan("dup-results");
+  clearCleanupSelectionsAndHideBar();
 });
 
 // --- Empty folders ---
@@ -1375,6 +1401,7 @@ $("empty-delete").addEventListener("click", async () => {
   invalidateData();
   showToast(`Deleted ${checked.length} folder(s).`);
   $("scan-empty").click();
+  clearCleanupSelectionsAndHideBar();
 });
 
 // --- Merge folders ---
@@ -1439,6 +1466,8 @@ $("merge-do").addEventListener("click", async () => {
   }
   invalidateData();
   showToast(`Merged folders. Removed ${merged} duplicate folder(s).`);
+  $("merge-results").innerHTML = "";
+  clearCleanupSelectionsAndHideBar();
   $("scan-merge").click();
 });
 
@@ -1519,10 +1548,14 @@ $("subset-delete").addEventListener("click", async () => {
   const checked = document.querySelectorAll("input[data-subset-id]:checked");
   if (checked.length === 0) { showToast("Select at least one bookmark to delete."); return; }
   if (!confirm(`Delete ${checked.length} selected bookmark(s)? This cannot be undone.`)) return;
-  for (const el of checked) await chrome.bookmarks.remove(el.dataset.subsetId);
+  for (const el of checked) {
+    el.closest(".item")?.remove();
+    await chrome.bookmarks.remove(el.dataset.subsetId);
+  }
   invalidateData();
   showToast(`Deleted ${checked.length} bookmark(s).`);
-  $("scan-subset").click();
+  scheduleCleanupRescan("subset-results");
+  clearCleanupSelectionsAndHideBar();
 });
 
 // --- Similar folder names ---
@@ -1586,6 +1619,8 @@ $("similar-folders-merge").addEventListener("click", async () => {
   }
   invalidateData();
   showToast(`Merged folders. Removed ${merged} folder(s).`);
+  $("similar-folders-results").innerHTML = "";
+  clearCleanupSelectionsAndHideBar();
   $("scan-similar-folders").click();
 });
 
@@ -1709,11 +1744,15 @@ $("broken-delete").addEventListener("click", async () => {
   const checked = document.querySelectorAll("input[data-broken-id]:checked");
   if (checked.length === 0) { showToast("Select at least one bookmark to delete."); return; }
   if (!confirm(`Delete ${checked.length} selected bookmark(s)? This cannot be undone.`)) return;
-  for (const el of checked) await chrome.bookmarks.remove(el.dataset.brokenId);
+  for (const el of checked) {
+    el.closest(".item")?.remove();
+    await chrome.bookmarks.remove(el.dataset.brokenId);
+  }
   invalidateData();
   showToast(`Deleted ${checked.length} bookmark(s).`);
-  $("broken-results").innerHTML = "";
-  $("broken-status").textContent = `Deleted ${checked.length}. Run scan again to recheck.`;
+  $("broken-status").textContent = `Deleted ${checked.length}. Rescan in 15s when idle.`;
+  scheduleCleanupRescan("broken-results");
+  clearCleanupSelectionsAndHideBar();
 });
 
 // --- Cleanup result inline edit: edit icon → URL, double-click name → title ---
