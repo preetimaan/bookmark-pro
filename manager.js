@@ -65,6 +65,7 @@ document.querySelectorAll(".top-tabs button").forEach((btn) => {
     const view = $("view-" + btn.dataset.view);
     if (view) view.classList.add("active");
     if (btn.dataset.view === "tags") {
+      populateImportFolders();
       renderTagsList();
     } else if (btn.dataset.view === "bookmarks") {
       invalidateData();
@@ -203,6 +204,14 @@ function applyBookmarkSort(items, allTags) {
   return sorted;
 }
 
+function getFolderPath(folderId, folderMap) {
+  if (!folderId) return "";
+  const f = folderMap[folderId];
+  if (!f) return "";
+  const parentPath = f.parentId ? getFolderPath(f.parentId, folderMap) : "";
+  return parentPath ? parentPath + " / " + (f.title || "") : (f.title || "");
+}
+
 async function renderBookmarkList(folderId) {
   const children = await chrome.bookmarks.getChildren(folderId);
   const folders = children.filter((c) => !c.url);
@@ -210,6 +219,12 @@ async function renderBookmarkList(folderId) {
   const container = $("bookmark-list");
   const allTags = await loadAllTags();
   bookmarks = applyBookmarkSort(bookmarks, allTags);
+
+  const data = await ensureData();
+  const folderMap = {};
+  (data.folders || []).forEach((f) => {
+    folderMap[f.id] = { title: f.title, parentId: f.parentId };
+  });
 
   if (folders.length === 0 && bookmarks.length === 0) {
     container.innerHTML = '<div class="empty-state">This folder is empty.</div>';
@@ -240,6 +255,7 @@ async function renderBookmarkList(folderId) {
     const tags = allTags[bm.id] || [];
     const dateStr = bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString() : "";
     const displayTitle = (typeof bm.title === "string" && bm.title) ? bm.title : "Bookmark";
+    const folderPath = getFolderPath(bm.parentId, folderMap);
 
     const row = document.createElement("div");
     row.className = "bookmark-row";
@@ -250,6 +266,7 @@ async function renderBookmarkList(folderId) {
       <div class="bookmark-info">
         <div class="bookmark-title" data-base-title="${escapeHtml(parseTitle(bm.title).baseTitle)}">${escapeHtml(displayTitle)}</div>
         <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+        ${folderPath ? `<div class="bookmark-folder-path">${escapeHtml(folderPath)}</div>` : ""}
         <div class="bookmark-tags">
           ${tagPills}
           <span class="tag-input-wrap">
@@ -706,6 +723,91 @@ $("tags-content").addEventListener("click", async (e) => {
   }
 });
 
+// --- Import tags from titles ---
+function populateImportFolders() {
+  const select = $("import-folder");
+  if (!select) return;
+  const scopeFolder = $("import-scope-folder");
+  ensureData().then((data) => {
+    const folders = flattenFolders(data.tree);
+    select.innerHTML = '<option value="">— Select folder —</option>';
+    folders.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.id;
+      opt.textContent = f.title || "(Unnamed)";
+      select.appendChild(opt);
+    });
+    select.disabled = !scopeFolder || !scopeFolder.checked;
+  });
+}
+
+$("import-scope-all")?.addEventListener("change", () => {
+  const sel = $("import-folder");
+  if (sel) sel.disabled = true;
+});
+$("import-scope-folder")?.addEventListener("change", () => {
+  const sel = $("import-folder");
+  if (sel) sel.disabled = false;
+});
+
+$("import-tags-btn")?.addEventListener("click", async () => {
+  const progressWrap = $("import-progress");
+  const progressFill = $("import-progress-fill");
+  const progressText = $("import-progress-text");
+  const btn = $("import-tags-btn");
+  const useFolder = $("import-scope-folder")?.checked;
+  const folderId = $("import-folder")?.value?.trim();
+
+  if (useFolder && !folderId) {
+    showToast("Select a folder first.");
+    return;
+  }
+
+  let bookmarks = [];
+  if (useFolder && folderId) {
+    const children = await chrome.bookmarks.getChildren(folderId);
+    bookmarks = children.filter((c) => c.url).map((c) => ({ id: c.id, url: c.url, title: c.title || "", parentId: c.parentId }));
+  } else {
+    const data = await ensureData();
+    bookmarks = data.bookmarks;
+  }
+
+  if (bookmarks.length === 0) {
+    showToast(useFolder ? "No bookmarks in that folder." : "No bookmarks found.");
+    return;
+  }
+
+  btn.disabled = true;
+  progressWrap.style.display = "block";
+  progressFill.style.width = "0%";
+  progressText.textContent = "Importing… 0%";
+
+  const all = await loadAllTags();
+  const total = bookmarks.length;
+  let updated = 0;
+
+  for (let i = 0; i < bookmarks.length; i++) {
+    const bm = bookmarks[i];
+    const { tags } = parseTitle(bm.title);
+    if (tags.length > 0) {
+      all[bm.id] = tags;
+      await syncTitleForBookmark(bm.id, tags);
+      updated++;
+    }
+    const pct = Math.round(((i + 1) / total) * 100);
+    progressFill.style.width = pct + "%";
+    progressText.textContent = "Importing… " + pct + "%";
+  }
+
+  await saveAllTags(all);
+  progressWrap.style.display = "none";
+  btn.disabled = false;
+  invalidateData();
+  if (selectedFolderId) renderBookmarkList(selectedFolderId);
+  renderTagsList();
+  showToast("Imported tags from " + updated + " bookmark(s). Titles use #tag format.");
+});
+
 // --- Bulk move ---
 let moveTargetId = null;
 
@@ -824,8 +926,14 @@ $("search-input").addEventListener("input", () => {
 });
 
 async function searchBookmarks(query) {
-  const { bookmarks } = await ensureData();
+  const data = await ensureData();
+  const { bookmarks } = data;
   const allTags = await loadAllTags();
+
+  const folderMap = {};
+  (data.folders || []).forEach((f) => {
+    folderMap[f.id] = { title: f.title, parentId: f.parentId };
+  });
 
   let results = bookmarks.filter((bm) => {
     const { baseTitle } = parseTitle(bm.title);
@@ -849,7 +957,10 @@ async function searchBookmarks(query) {
     const { baseTitle } = parseTitle(bm.title);
     const tags = allTags[bm.id] || [];
     const dateStr = bm.dateAdded ? new Date(bm.dateAdded).toLocaleDateString() : "";
+    const displayTitle = (typeof bm.title === "string" && bm.title) ? bm.title : "Bookmark";
+    const folderPath = getFolderPath(bm.parentId, folderMap);
     const tagPills = tags.map((t) => tagPillHtml(bm.id, t)).join("");
+    const folderPathHtml = folderPath ? `<div class="bookmark-folder-path">${escapeHtml(folderPath)}</div>` : "";
 
     const row = document.createElement("div");
     row.className = "bookmark-row";
@@ -857,8 +968,9 @@ async function searchBookmarks(query) {
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
-        <div class="bookmark-title">${escapeHtml(baseTitle)}</div>
+        <div class="bookmark-title" data-base-title="${escapeHtml(baseTitle)}">${escapeHtml(displayTitle)}</div>
         <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+        ${folderPathHtml}
         <div class="bookmark-tags">
           ${tagPills}
           <span class="tag-input-wrap">
@@ -952,8 +1064,14 @@ $("scan-duplicates").addEventListener("click", async () => {
   $("dup-results").innerHTML = "";
   $("dup-actions").style.display = "none";
 
-  const { bookmarks } = await ensureData();
+  const data = await ensureData();
+  const { bookmarks } = data;
   duplicateGroups = findDuplicateGroups(bookmarks);
+
+  const folderMap = {};
+  (data.folders || []).forEach((f) => {
+    folderMap[f.id] = { title: f.title, parentId: f.parentId };
+  });
 
   status.textContent =
     duplicateGroups.length === 0
@@ -968,6 +1086,8 @@ $("scan-duplicates").addEventListener("click", async () => {
     div.className = "group";
     div.innerHTML = `<div class="group-header"><label><input type="checkbox" data-dup-select-all /> Select all</label></div>`;
     group.items.forEach((item, ii) => {
+      const folderPath = getFolderPath(item.parentId, folderMap);
+      const folderPathHtml = folderPath ? `<div class="item-folder-path">${escapeHtml(folderPath)}</div>` : "";
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
       itemDiv.innerHTML = `
@@ -975,6 +1095,7 @@ $("scan-duplicates").addEventListener("click", async () => {
         <div>
           <div class="item-title">${escapeHtml(item.title)}</div>
           <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          ${folderPathHtml}
         </div>
       `;
       div.appendChild(itemDiv);
@@ -1129,8 +1250,14 @@ $("scan-subset").addEventListener("click", async () => {
   $("subset-actions").style.display = "none";
 
   const stripQuery = $("subset-strip-query").checked;
-  const { bookmarks } = await ensureData();
+  const data = await ensureData();
+  const { bookmarks } = data;
   subsetGroups = findSubsetGroups(bookmarks, { stripQuery });
+
+  const folderMap = {};
+  (data.folders || []).forEach((f) => {
+    folderMap[f.id] = { title: f.title, parentId: f.parentId };
+  });
 
   status.textContent = subsetGroups.length === 0
     ? "No similar/subset URL groups found."
@@ -1144,14 +1271,17 @@ $("scan-subset").addEventListener("click", async () => {
     div.className = "group";
     div.innerHTML = `<div class="group-header"><label><input type="checkbox" data-subset-select-all /> Select all</label></div>`;
     group.items.forEach((item, ii) => {
+      const folderPath = getFolderPath(item.parentId, folderMap);
+      const folderPathHtml = folderPath ? `<div class="item-folder-path">${escapeHtml(folderPath)}</div>` : "";
+      const keepHint = ii === 0 ? ' <span class="merge-target">(shortest – keep)</span>' : "";
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
-      const keepHint = ii === 0 ? ' <span class="merge-target">(shortest – keep)</span>' : "";
       itemDiv.innerHTML = `
         <input type="checkbox" data-subset-id="${item.id}" data-group="${gi}" data-item="${ii}" />
         <div>
           <div class="item-title">${escapeHtml(item.title)}${keepHint}</div>
           <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          ${folderPathHtml}
         </div>
       `;
       div.appendChild(itemDiv);
@@ -1301,6 +1431,12 @@ $("scan-broken").addEventListener("click", async () => {
   status.className = "";
   if (brokenCount === 0) return;
 
+  const data = await ensureData();
+  const folderMap = {};
+  (data.folders || []).forEach((f) => {
+    folderMap[f.id] = { title: f.title, parentId: f.parentId };
+  });
+
   const container = $("broken-results");
   brokenGroups.forEach((group) => {
     const div = document.createElement("div");
@@ -1313,6 +1449,8 @@ $("scan-broken").addEventListener("click", async () => {
       </div>
     `;
     group.items.forEach((item) => {
+      const folderPath = getFolderPath(item.parentId, folderMap);
+      const folderPathHtml = folderPath ? `<div class="item-folder-path">${escapeHtml(folderPath)}</div>` : "";
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
       const errText = item.status ? `${item.status}` : item.error || "Error";
@@ -1321,6 +1459,7 @@ $("scan-broken").addEventListener("click", async () => {
         <div>
           <div class="item-title">${escapeHtml(item.title)} <span class="error-badge">${escapeHtml(errText)}</span></div>
           <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          ${folderPathHtml}
         </div>
       `;
       div.appendChild(itemDiv);
