@@ -75,6 +75,7 @@ document.querySelectorAll(".top-tabs button").forEach((btn) => {
       $("cleanup-bottom-bar")?.classList.remove("visible");
     } else if (btn.dataset.view === "cleanup") {
       updateCleanupBottomBar();
+      populateCleanupScopeDropdown();
     }
   });
 });
@@ -347,6 +348,7 @@ async function renderBookmarkList(folderId) {
         <div class="bookmark-title-wrap">
           <div class="bookmark-title" data-base-title="${escapeHtml(parseTitle(bm.title).baseTitle)}">${escapeHtml(displayTitle)}</div>
           <button type="button" class="bookmark-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+          <button type="button" class="bookmark-copy-title" title="Copy name" aria-label="Copy name">⎘</button>
         </div>
         <div class="bookmark-url-wrap">
           <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
@@ -473,6 +475,17 @@ $("bookmark-list").addEventListener("click", (e) => {
   const url = link?.href || input?.value || "";
   if (!url) return;
   navigator.clipboard.writeText(url).then(() => showToast("Copied"), () => showToast("Copy failed"));
+});
+
+$("bookmark-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".bookmark-copy-title");
+  if (!btn) return;
+  e.preventDefault();
+  const wrap = btn.closest(".bookmark-title-wrap");
+  const titleEl = wrap?.querySelector(".bookmark-title");
+  const text = titleEl?.textContent?.trim() || "";
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => showToast("Copied"), () => showToast("Copy failed"));
 });
 
 // --- Selection ---
@@ -1101,6 +1114,7 @@ async function searchBookmarks(query) {
         <div class="bookmark-title-wrap">
           <div class="bookmark-title" data-base-title="${escapeHtml(baseTitle)}">${escapeHtml(displayTitle)}</div>
           <button type="button" class="bookmark-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+          <button type="button" class="bookmark-copy-title" title="Copy name" aria-label="Copy name">⎘</button>
         </div>
         <div class="bookmark-url-wrap">
           <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
@@ -1170,6 +1184,55 @@ renderFolderTree();
 // CLEANUP TOOLS (ported from options.js)
 // =====================================================
 
+/** Return folder ids that are the given folder or its descendants. If folderId is empty/null, return all folder ids. */
+function getCleanupScopeFolderIds(folderId, folders) {
+  if (!folders || !folders.length) return new Set();
+  const allIds = new Set(folders.map((f) => f.id));
+  if (!folderId) return allIds;
+  const byParent = {};
+  folders.forEach((f) => {
+    if (!byParent[f.parentId]) byParent[f.parentId] = [];
+    byParent[f.parentId].push(f.id);
+  });
+  const result = new Set([folderId]);
+  let queue = [folderId];
+  while (queue.length) {
+    const pid = queue.pop();
+    (byParent[pid] || []).forEach((id) => {
+      if (!result.has(id)) {
+        result.add(id);
+        queue.push(id);
+      }
+    });
+  }
+  return result;
+}
+
+/** Build { id, path } for each folder from tree (excluding root). */
+function getFolderPathsFromTree(node, segments = []) {
+  const list = [];
+  if (!node || !node.children) return list;
+  const title = node.title || (node.id === "0" || node.id === "1" ? "Bookmarks" : "");
+  const segs = title ? [...segments, title] : segments;
+  if (node.id !== "0" && node.id !== "1") {
+    list.push({ id: node.id, path: segs.join(" / ") });
+  }
+  for (const c of node.children) {
+    if (c.children) list.push(...getFolderPathsFromTree(c, segs));
+  }
+  return list;
+}
+
+async function populateCleanupScopeDropdown() {
+  const sel = $("cleanup-scope-folder");
+  if (!sel) return;
+  const data = await ensureData();
+  const options = [{ value: "", path: "All bookmarks" }, ...getFolderPathsFromTree(data.tree)];
+  const current = sel.value;
+  sel.innerHTML = options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.path)}</option>`).join("");
+  if (options.some((o) => o.value === current)) sel.value = current;
+}
+
 function syncSelectAll(group) {
   const selectAllCb = group.querySelector("[data-dup-select-all], [data-subset-select-all]");
   if (!selectAllCb) return;
@@ -1201,8 +1264,11 @@ $("scan-duplicates").addEventListener("click", async () => {
   $("dup-results").innerHTML = "";
 
   const data = await ensureData();
-  const { bookmarks } = data;
-  duplicateGroups = findDuplicateGroups(bookmarks);
+  const { bookmarks, folders } = data;
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const bookmarksInScope = bookmarks.filter((b) => scopeFolderIds.has(b.parentId));
+  duplicateGroups = findDuplicateGroups(bookmarksInScope);
 
   const folderMap = {};
   (data.folders || []).forEach((f) => {
@@ -1232,6 +1298,7 @@ $("scan-duplicates").addEventListener("click", async () => {
           <div class="item-title-wrap">
             <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
             <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+            <button type="button" class="item-copy-title" title="Copy name" aria-label="Copy name">⎘</button>
           </div>
           <div class="item-url-wrap">
             <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
@@ -1268,7 +1335,10 @@ $("scan-empty").addEventListener("click", async () => {
   $("empty-results").innerHTML = "";
 
   const { bookmarks, folders, tree } = await ensureData();
-  const emptyIds = findEmptyFolders(folders, bookmarks);
+  const emptyIdsAll = findEmptyFolders(folders, bookmarks);
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const emptyIds = emptyIdsAll.filter((id) => scopeFolderIds.has(id));
   emptyFolderList = getEmptyFolderDetails(emptyIds, folders, tree);
 
   status.textContent = emptyFolderList.length === 0
@@ -1317,7 +1387,10 @@ $("scan-merge").addEventListener("click", async () => {
   $("merge-results").innerHTML = "";
 
   const { folders, tree } = await ensureData();
-  mergeCandidates = findMergeCandidates(folders);
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const scopeFolders = folders.filter((f) => scopeFolderIds.has(f.id));
+  mergeCandidates = findMergeCandidates(scopeFolders);
 
   status.textContent = mergeCandidates.length === 0
     ? "No merge candidates found."
@@ -1391,8 +1464,11 @@ $("scan-subset").addEventListener("click", async () => {
 
   const stripQuery = $("subset-strip-query").checked;
   const data = await ensureData();
-  const { bookmarks } = data;
-  subsetGroups = findSubsetGroups(bookmarks, { stripQuery });
+  const { bookmarks, folders } = data;
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const bookmarksInScope = bookmarks.filter((b) => scopeFolderIds.has(b.parentId));
+  subsetGroups = findSubsetGroups(bookmarksInScope, { stripQuery });
 
   const folderMap = {};
   (data.folders || []).forEach((f) => {
@@ -1422,6 +1498,7 @@ $("scan-subset").addEventListener("click", async () => {
           <div class="item-title-wrap">
             <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}${keepHint}</div>
             <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+            <button type="button" class="item-copy-title" title="Copy name" aria-label="Copy name">⎘</button>
           </div>
           <div class="item-url-wrap">
             <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
@@ -1458,7 +1535,10 @@ $("scan-similar-folders").addEventListener("click", async () => {
   $("similar-folders-results").innerHTML = "";
 
   const { folders, tree } = await ensureData();
-  similarFolderGroups = findSimilarFolderGroups(folders, tree);
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const scopeFolders = folders.filter((f) => scopeFolderIds.has(f.id));
+  similarFolderGroups = findSimilarFolderGroups(scopeFolders, tree);
 
   status.textContent = similarFolderGroups.length === 0
     ? "No similar folder names found."
@@ -1551,8 +1631,12 @@ $("scan-broken").addEventListener("click", async () => {
   progressFill.style.width = "0%";
   progressText.textContent = "0 / …";
 
-  const { bookmarks } = await ensureData();
-  const httpBookmarks = bookmarks.filter(
+  const data = await ensureData();
+  const { bookmarks, folders } = data;
+  const scopeId = $("cleanup-scope-folder")?.value || null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const bookmarksInScope = bookmarks.filter((b) => scopeFolderIds.has(b.parentId));
+  const httpBookmarks = bookmarksInScope.filter(
     (b) => b.url && (b.url.startsWith("http://") || b.url.startsWith("https://"))
   );
   progressText.textContent = `0 / ${httpBookmarks.length}`;
@@ -1576,7 +1660,6 @@ $("scan-broken").addEventListener("click", async () => {
   status.className = "";
   if (brokenCount === 0) return;
 
-  const data = await ensureData();
   const folderMap = {};
   (data.folders || []).forEach((f) => {
     folderMap[f.id] = { title: f.title, parentId: f.parentId };
@@ -1605,6 +1688,7 @@ $("scan-broken").addEventListener("click", async () => {
           <div class="item-title-wrap">
             <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)} <span class="error-badge">${escapeHtml(errText)}</span></div>
             <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+            <button type="button" class="item-copy-title" title="Copy name" aria-label="Copy name">⎘</button>
           </div>
           <div class="item-url-wrap">
             <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
@@ -1821,4 +1905,15 @@ document.addEventListener("click", (e) => {
   if (!url) return;
   e.preventDefault();
   navigator.clipboard.writeText(url).then(() => showToast("Copied"), () => showToast("Copy failed"));
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".item-copy-title");
+  if (!btn) return;
+  const wrap = btn.closest(".item-title-wrap");
+  const titleEl = wrap?.querySelector(".item-title");
+  const text = (titleEl?.dataset.itemTitle ?? titleEl?.textContent?.trim()) || "";
+  if (!text) return;
+  e.preventDefault();
+  navigator.clipboard.writeText(text).then(() => showToast("Copied"), () => showToast("Copy failed"));
 });

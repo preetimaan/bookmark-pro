@@ -164,30 +164,35 @@
     .bookmark-list {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
+      min-width: 0;
       padding: 0;
     }
     .bookmark-row, .folder-entry {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
+      flex-wrap: wrap;
       gap: 12px;
       padding: 8px 20px;
       border-radius: 8px;
       margin: 2px 8px;
       font-size: 0.9rem;
+      min-width: 0;
     }
     .bookmark-row:hover, .folder-entry:hover { background: var(--hover-bg); }
     .bookmark-row.selected { background: var(--row-selected-bg); }
     .folder-entry {
       cursor: pointer;
       color: var(--text);
+      align-items: center;
     }
     .folder-entry .folder-icon { color: var(--muted); flex-shrink: 0; display: inline-flex; align-items: center; }
     .folder-entry .folder-icon svg { width: 20px; height: 20px; }
     .folder-entry .folder-entry-name { font-weight: 500; }
     .bookmark-row input[type="checkbox"] { flex-shrink: 0; }
     .bookmark-info { flex: 1; min-width: 0; }
-    .bookmark-title-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .bookmark-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; flex: 1; min-width: 0; }
+    .bookmark-title-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+    .bookmark-title { font-weight: 500; overflow-wrap: break-word; word-break: break-word; cursor: default; flex: 1; min-width: 0; }
     .bookmark-title.editing,
     .bookmark-url.editing {
       background: var(--surface);
@@ -204,19 +209,20 @@
     .bookmark-url {
       color: var(--muted);
       font-size: 0.8rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      word-break: break-all;
+      overflow-wrap: anywhere;
       text-decoration: none;
       display: block;
       flex: 1;
       min-width: 0;
     }
-    .bookmark-url-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .bookmark-url-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
     .bookmark-edit-url { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .bookmark-edit-url:hover { color: var(--accent); }
     .bookmark-edit-title { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .bookmark-edit-title:hover { color: var(--accent); }
+    .bookmark-copy-title { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
+    .bookmark-copy-title:hover { color: var(--accent); }
     .bookmark-copy-url { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .bookmark-copy-url:hover { color: var(--accent); }
     a.bookmark-url:hover { color: var(--accent); text-decoration: underline; }
@@ -456,13 +462,14 @@
     .panel h2 { font-size: 1.1rem; margin: 0 0 12px; }
     .scan-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .loading { color: var(--muted); }
-    .results { margin-top: 16px; }
+    .results { margin-top: 16px; overflow-x: hidden; min-width: 0; }
     .group {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 12px 16px;
       margin-bottom: 12px;
+      min-width: 0;
     }
     .group-header {
       display: flex;
@@ -476,20 +483,24 @@
     .item {
       display: flex;
       align-items: flex-start;
+      flex-wrap: wrap;
       gap: 10px;
       padding: 6px 0;
       font-size: 0.9rem;
+      min-width: 0;
     }
     .item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
-    .item-url-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .item-url { word-break: break-all; color: var(--muted); font-size: 0.85rem; text-decoration: none; display: block; flex: 1; min-width: 0; }
+    .item-url-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+    .item-url { word-break: break-all; overflow-wrap: anywhere; color: var(--muted); font-size: 0.85rem; text-decoration: none; display: block; flex: 1; min-width: 0; }
     a.item-url:hover { color: var(--accent); text-decoration: underline; }
     .item-edit-url { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .item-edit-url:hover { color: var(--accent); }
-    .item-title-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .item-title-wrap .item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item-title-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+    .item-title-wrap .item-title { flex: 1; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
     .item-edit-title { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .item-edit-title:hover { color: var(--accent); }
+    .item-copy-title { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
+    .item-copy-title:hover { color: var(--accent); }
     .item-copy-url { flex-shrink: 0; padding: 2px 6px; cursor: pointer; background: transparent; border: none; color: var(--muted); font-size: 0.9rem; border-radius: 4px; }
     .item-copy-url:hover { color: var(--accent); }
     .item-title { font-weight: 500; cursor: default; }
@@ -623,6 +634,14 @@
     <div style="flex: 1; overflow-y: auto; padding: 24px;">
     <div class="warning">
       <strong>Backup first.</strong> Removed bookmarks cannot be restored. Export your bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export bookmarks) before deleting.
+    </div>
+
+    <div class="cleanup-scope-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+      <label for="cleanup-scope-folder" style="font-size: 0.9rem; color: var(--muted);">Scope:</label>
+      <select id="cleanup-scope-folder" style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; min-width: 200px;">
+        <option value="">All bookmarks</option>
+      </select>
+      <span style="font-size: 0.85rem; color: var(--muted);">Only scan bookmarks in this folder and its subfolders.</span>
     </div>
 
     <div class="tabs" id="cleanup-tabs">
