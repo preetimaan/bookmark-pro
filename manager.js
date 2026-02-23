@@ -344,8 +344,15 @@ async function renderBookmarkList(folderId) {
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
-        <div class="bookmark-title" data-base-title="${escapeHtml(parseTitle(bm.title).baseTitle)}">${escapeHtml(displayTitle)}</div>
-        <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+        <div class="bookmark-title-wrap">
+          <div class="bookmark-title" data-base-title="${escapeHtml(parseTitle(bm.title).baseTitle)}">${escapeHtml(displayTitle)}</div>
+          <button type="button" class="bookmark-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+        </div>
+        <div class="bookmark-url-wrap">
+          <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+          <button type="button" class="bookmark-edit-url" title="Edit URL" aria-label="Edit URL">✎</button>
+          <button type="button" class="bookmark-copy-url" title="Copy URL" aria-label="Copy URL">⎘</button>
+        </div>
         ${folderPath ? `<div class="bookmark-folder-path">${escapeHtml(folderPath)}</div>` : ""}
         <div class="bookmark-tags">
           ${tagPills}
@@ -364,19 +371,12 @@ async function renderBookmarkList(folderId) {
 }
 
 // --- Inline editing ---
-$("bookmark-list").addEventListener("dblclick", (e) => {
-  const titleEl = e.target.closest(".bookmark-title");
-  const urlEl = e.target.closest(".bookmark-url");
-  const target = titleEl || urlEl;
-  if (!target || target.isContentEditable) return;
+function startBookmarkInlineEdit(target, bmId, isTitle) {
+  if (target.isContentEditable) return;
 
-  const row = target.closest(".bookmark-row");
-  if (!row) return;
-  const bmId = row.dataset.id;
-
-  if (titleEl) {
-    const base = titleEl.getAttribute("data-base-title");
-    if (base != null) titleEl.textContent = base;
+  if (isTitle) {
+    const base = target.getAttribute("data-base-title");
+    if (base != null) target.textContent = base;
   }
   target.setAttribute("contenteditable", "true");
   target.classList.add("editing");
@@ -398,7 +398,7 @@ $("bookmark-list").addEventListener("dblclick", (e) => {
     }
 
     try {
-      if (titleEl) {
+      if (isTitle) {
         const tags = await getTagsForBookmark(bmId);
         const priorityMap = await loadPriorityMap();
         const newTitle = buildTitle(newValue, tags, priorityMap);
@@ -426,6 +426,53 @@ $("bookmark-list").addEventListener("dblclick", (e) => {
 
   target.addEventListener("blur", commit, { once: true });
   target.addEventListener("keydown", onKey);
+}
+
+$("bookmark-list").addEventListener("dblclick", (e) => {
+  const titleEl = e.target.closest(".bookmark-title");
+  const urlEl = e.target.closest(".bookmark-url");
+  const target = titleEl || urlEl;
+  if (!target) return;
+
+  const row = target.closest(".bookmark-row");
+  if (!row) return;
+  const bmId = row.dataset.id;
+
+  startBookmarkInlineEdit(target, bmId, !!titleEl);
+});
+
+$("bookmark-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".bookmark-edit-url");
+  if (!btn) return;
+  e.preventDefault();
+  const row = btn.closest(".bookmark-row");
+  if (!row) return;
+  const urlEl = row.querySelector(".bookmark-url");
+  if (!urlEl) return;
+  startBookmarkInlineEdit(urlEl, row.dataset.id, false);
+});
+
+$("bookmark-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".bookmark-edit-title");
+  if (!btn) return;
+  e.preventDefault();
+  const row = btn.closest(".bookmark-row");
+  if (!row) return;
+  const titleEl = row.querySelector(".bookmark-title");
+  if (!titleEl) return;
+  startBookmarkInlineEdit(titleEl, row.dataset.id, true);
+});
+
+$("bookmark-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".bookmark-copy-url");
+  if (!btn) return;
+  e.preventDefault();
+  const wrap = btn.closest(".bookmark-url-wrap");
+  const link = wrap?.querySelector(".bookmark-url");
+  const input = wrap?.querySelector(".item-url-input");
+  const url = link?.href || input?.value || "";
+  if (!url) return;
+  navigator.clipboard.writeText(url).then(() => showToast("Copied"), () => showToast("Copy failed"));
 });
 
 // --- Selection ---
@@ -1051,8 +1098,15 @@ async function searchBookmarks(query) {
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
       <div class="bookmark-info">
-        <div class="bookmark-title" data-base-title="${escapeHtml(baseTitle)}">${escapeHtml(displayTitle)}</div>
-        <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+        <div class="bookmark-title-wrap">
+          <div class="bookmark-title" data-base-title="${escapeHtml(baseTitle)}">${escapeHtml(displayTitle)}</div>
+          <button type="button" class="bookmark-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+        </div>
+        <div class="bookmark-url-wrap">
+          <a class="bookmark-url" href="${escapeHtml(bm.url)}" target="_blank" rel="noopener">${escapeHtml(bm.url)}</a>
+          <button type="button" class="bookmark-edit-url" title="Edit URL" aria-label="Edit URL">✎</button>
+          <button type="button" class="bookmark-copy-url" title="Copy URL" aria-label="Copy URL">⎘</button>
+        </div>
         ${folderPathHtml}
         <div class="bookmark-tags">
           ${tagPills}
@@ -1175,8 +1229,15 @@ $("scan-duplicates").addEventListener("click", async () => {
       itemDiv.innerHTML = `
         <input type="checkbox" data-dup-id="${item.id}" data-group="${gi}" data-item="${ii}" />
         <div>
-          <div class="item-title">${escapeHtml(item.title)}</div>
-          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          <div class="item-title-wrap">
+            <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+            <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+          </div>
+          <div class="item-url-wrap">
+            <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+            <button type="button" class="item-edit-url" title="Edit URL" aria-label="Edit URL">✎</button>
+            <button type="button" class="item-copy-url" title="Copy URL" aria-label="Copy URL">⎘</button>
+          </div>
           ${folderPathHtml}
         </div>
       `;
@@ -1358,8 +1419,15 @@ $("scan-subset").addEventListener("click", async () => {
       itemDiv.innerHTML = `
         <input type="checkbox" data-subset-id="${item.id}" data-group="${gi}" data-item="${ii}" />
         <div>
-          <div class="item-title">${escapeHtml(item.title)}${keepHint}</div>
-          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          <div class="item-title-wrap">
+            <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}${keepHint}</div>
+            <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+          </div>
+          <div class="item-url-wrap">
+            <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+            <button type="button" class="item-edit-url" title="Edit URL" aria-label="Edit URL">✎</button>
+            <button type="button" class="item-copy-url" title="Copy URL" aria-label="Copy URL">⎘</button>
+          </div>
           ${folderPathHtml}
         </div>
       `;
@@ -1534,8 +1602,15 @@ $("scan-broken").addEventListener("click", async () => {
       itemDiv.innerHTML = `
         <input type="checkbox" data-broken-id="${item.id}" />
         <div>
-          <div class="item-title">${escapeHtml(item.title)} <span class="error-badge">${escapeHtml(errText)}</span></div>
-          <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+          <div class="item-title-wrap">
+            <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)} <span class="error-badge">${escapeHtml(errText)}</span></div>
+            <button type="button" class="item-edit-title" title="Edit name" aria-label="Edit name">✎</button>
+          </div>
+          <div class="item-url-wrap">
+            <a class="item-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>
+            <button type="button" class="item-edit-url" title="Edit URL" aria-label="Edit URL">✎</button>
+            <button type="button" class="item-copy-url" title="Copy URL" aria-label="Copy URL">⎘</button>
+          </div>
           ${folderPathHtml}
         </div>
       `;
@@ -1555,4 +1630,195 @@ $("broken-delete").addEventListener("click", async () => {
   showToast(`Deleted ${checked.length} bookmark(s).`);
   $("broken-results").innerHTML = "";
   $("broken-status").textContent = `Deleted ${checked.length}. Run scan again to recheck.`;
+});
+
+// --- Cleanup result inline edit: edit icon → URL, double-click name → title ---
+let cleanupRescanTimer = null;
+const CLEANUP_RESCAN_IDLE_MS = 15000;
+const cleanupRescanPending = { "dup-results": false, "subset-results": false, "broken-results": false };
+
+function scheduleCleanupRescan(containerId) {
+  if (!cleanupRescanPending.hasOwnProperty(containerId)) return;
+  cleanupRescanPending[containerId] = true;
+  if (cleanupRescanTimer) clearTimeout(cleanupRescanTimer);
+  cleanupRescanTimer = setTimeout(() => {
+    if (cleanupRescanPending["dup-results"]) $("scan-duplicates").click();
+    if (cleanupRescanPending["subset-results"]) $("scan-subset").click();
+    if (cleanupRescanPending["broken-results"]) $("scan-broken").click();
+    cleanupRescanPending["dup-results"] = false;
+    cleanupRescanPending["subset-results"] = false;
+    cleanupRescanPending["broken-results"] = false;
+    cleanupRescanTimer = null;
+  }, CLEANUP_RESCAN_IDLE_MS);
+}
+
+function getCleanupBookmarkId(row) {
+  const cb = row.querySelector("input[data-dup-id], input[data-subset-id], input[data-broken-id]");
+  return cb ? (cb.dataset.dupId || cb.dataset.subsetId || cb.dataset.brokenId) : null;
+}
+
+function getCleanupScanButton(container) {
+  if (!container) return null;
+  const id = container.id;
+  if (id === "dup-results") return $("scan-duplicates");
+  if (id === "subset-results") return $("scan-subset");
+  if (id === "broken-results") return $("scan-broken");
+  return null;
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".item-edit-url");
+  if (!btn) return;
+  const wrap = btn.closest(".item-url-wrap");
+  const container = wrap?.closest("#dup-results, #subset-results, #broken-results");
+  if (!wrap || !container) return;
+  const row = wrap.closest(".item");
+  const bmId = getCleanupBookmarkId(row);
+  if (!bmId) return;
+
+  const link = wrap.querySelector(".item-url");
+  const existingInput = wrap.querySelector(".item-url-input");
+  if (existingInput) return;
+
+  const currentUrl = link.href || "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "item-url-input";
+  input.value = currentUrl;
+  input.setAttribute("size", "1");
+  link.replaceWith(input);
+  input.focus();
+  input.select();
+
+  async function commit() {
+    input.removeEventListener("blur", commit);
+    input.removeEventListener("keydown", onKey);
+    const newUrl = input.value.trim();
+    if (!newUrl) {
+      restore();
+      return;
+    }
+    try {
+      await chrome.bookmarks.update(bmId, { url: newUrl });
+      invalidateData();
+      if (newUrl !== currentUrl) scheduleCleanupRescan(container.id);
+    } catch (err) {
+      showToast("Failed to save URL: " + err.message);
+      restore();
+    }
+  }
+
+  function restore() {
+    const a = document.createElement("a");
+    a.className = "item-url";
+    a.href = input.value.trim() || currentUrl;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = input.value.trim() || currentUrl;
+    input.replaceWith(a);
+  }
+
+  function onKey(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+    if (e.key === "Escape") {
+      input.removeEventListener("blur", commit);
+      input.removeEventListener("keydown", onKey);
+      restore();
+    }
+  }
+
+  input.addEventListener("blur", commit, { once: true });
+  input.addEventListener("keydown", onKey);
+});
+
+function startCleanupTitleEdit(titleEl) {
+  if (titleEl.classList.contains("editing")) return;
+  const container = titleEl.closest("#dup-results, #subset-results, #broken-results");
+  if (!container) return;
+  const row = titleEl.closest(".item");
+  const bmId = getCleanupBookmarkId(row);
+  if (!bmId || !titleEl.dataset.itemTitle) return;
+
+  const oldHtml = titleEl.innerHTML;
+  const cleanTitle = titleEl.dataset.itemTitle;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "item-title-input";
+  input.value = cleanTitle;
+  titleEl.textContent = "";
+  titleEl.classList.add("editing");
+  titleEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  async function commit() {
+    input.removeEventListener("blur", commit);
+    input.removeEventListener("keydown", onKey);
+    titleEl.classList.remove("editing");
+    const newTitle = input.value.trim();
+    if (!newTitle) {
+      titleEl.innerHTML = oldHtml;
+      return;
+    }
+    try {
+      const tags = await getTagsForBookmark(bmId);
+      const priorityMap = await loadPriorityMap();
+      const builtTitle = buildTitle(newTitle, tags, priorityMap);
+      await chrome.bookmarks.update(bmId, { title: builtTitle });
+      invalidateData();
+      if (newTitle !== cleanTitle) scheduleCleanupRescan(container.id);
+    } catch (err) {
+      showToast("Failed to save title: " + err.message);
+      titleEl.innerHTML = oldHtml;
+    }
+  }
+
+  function onKey(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    }
+    if (e.key === "Escape") {
+      input.removeEventListener("blur", commit);
+      input.removeEventListener("keydown", onKey);
+      titleEl.classList.remove("editing");
+      titleEl.innerHTML = oldHtml;
+    }
+  }
+
+  input.addEventListener("blur", commit, { once: true });
+  input.addEventListener("keydown", onKey);
+}
+
+document.addEventListener("dblclick", (e) => {
+  const titleEl = e.target.closest(".item-title");
+  if (!titleEl) return;
+  startCleanupTitleEdit(titleEl);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".item-edit-title");
+  if (!btn) return;
+  const wrap = btn.closest(".item-title-wrap");
+  const container = wrap?.closest("#dup-results, #subset-results, #broken-results");
+  if (!wrap || !container) return;
+  const titleEl = wrap.querySelector(".item-title");
+  if (!titleEl) return;
+  e.preventDefault();
+  startCleanupTitleEdit(titleEl);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".item-copy-url");
+  if (!btn) return;
+  const wrap = btn.closest(".item-url-wrap");
+  const link = wrap?.querySelector(".item-url");
+  const input = wrap?.querySelector(".item-url-input");
+  const url = link?.href || input?.value || "";
+  if (!url) return;
+  e.preventDefault();
+  navigator.clipboard.writeText(url).then(() => showToast("Copied"), () => showToast("Copy failed"));
 });
