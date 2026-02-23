@@ -406,8 +406,12 @@
 
     /* --- Cleanup view (existing) --- */
     #view-cleanup {
-      overflow-y: auto;
-      padding: 24px;
+      overflow: hidden;
+    }
+    #view-cleanup.active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     /* Cleanup sub-tabs and styles (carried over from options.html) */
@@ -548,13 +552,6 @@
       <div class="bookmark-list" id="bookmark-list">
         <div class="empty-state">Select a folder to view bookmarks.</div>
       </div>
-      <div class="bottom-bar" id="bottom-bar">
-        <span class="selection-count" id="selection-count">0 selected</span>
-        <button type="button" class="small" id="bulk-deselect">Deselect all</button>
-        <button type="button" class="small" id="bulk-delete">Delete</button>
-        <button type="button" class="small" id="bulk-move">Move to…</button>
-        <button type="button" class="small" id="bulk-tag">Tag…</button>
-      </div>
     </div>
   </div>
 
@@ -603,6 +600,7 @@
 
   <!-- Cleanup view -->
   <div id="view-cleanup" class="view">
+    <div style="flex: 1; overflow-y: auto; padding: 24px;">
     <div class="warning">
       <strong>Backup first.</strong> Removed bookmarks cannot be restored. Export your bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export bookmarks) before deleting.
     </div>
@@ -623,9 +621,6 @@
         <span id="dup-status" class="loading"></span>
       </div>
       <div id="dup-results" class="results"></div>
-      <div id="dup-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="dup-delete">Delete selected</button>
-      </div>
     </div>
 
     <div id="panel-empty" class="panel">
@@ -635,9 +630,6 @@
         <span id="empty-status" class="loading"></span>
       </div>
       <div id="empty-results" class="results"></div>
-      <div id="empty-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="empty-delete">Delete selected folders</button>
-      </div>
     </div>
 
     <div id="panel-merge" class="panel">
@@ -648,9 +640,6 @@
         <span id="merge-status" class="loading"></span>
       </div>
       <div id="merge-results" class="results"></div>
-      <div id="merge-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="merge-do">Merge selected groups</button>
-      </div>
     </div>
 
     <div id="panel-subset" class="panel">
@@ -664,9 +653,6 @@
         <span id="subset-status" class="loading"></span>
       </div>
       <div id="subset-results" class="results"></div>
-      <div id="subset-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="subset-delete">Delete selected</button>
-      </div>
     </div>
 
     <div id="panel-similar-folders" class="panel">
@@ -677,9 +663,6 @@
         <span id="similar-folders-status" class="loading"></span>
       </div>
       <div id="similar-folders-results" class="results"></div>
-      <div id="similar-folders-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="similar-folders-merge">Merge selected groups</button>
-      </div>
     </div>
 
     <div id="panel-broken" class="panel">
@@ -694,9 +677,21 @@
         <span id="broken-progress-text" style="font-size: 0.85rem; color: var(--muted);"></span>
       </div>
       <div id="broken-results" class="results"></div>
-      <div id="broken-actions" style="display: none; margin-top: 12px;">
-        <button type="button" class="primary" id="broken-delete">Delete selected</button>
-      </div>
+    </div>
+    </div>
+    <div id="cleanup-bottom-bar" class="bottom-bar" style="flex-shrink: 0;">
+      <span class="selection-count" id="cleanup-selection-count">0 selected</span>
+      <button type="button" class="small" id="cleanup-deselect">Deselect all</button>
+      <button type="button" class="primary" id="cleanup-primary-action">Delete selected</button>
+    </div>
+    <!-- Hidden buttons so bottom bar can trigger them -->
+    <div style="display: none;">
+      <button type="button" id="dup-delete">Delete selected</button>
+      <button type="button" id="empty-delete">Delete selected folders</button>
+      <button type="button" id="merge-do">Merge selected groups</button>
+      <button type="button" id="subset-delete">Delete selected</button>
+      <button type="button" id="similar-folders-merge">Merge selected groups</button>
+      <button type="button" id="broken-delete">Delete selected</button>
     </div>
   </div>
 

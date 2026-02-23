@@ -67,10 +67,14 @@ document.querySelectorAll(".top-tabs button").forEach((btn) => {
     if (btn.dataset.view === "tags") {
       populateImportFolders();
       renderTagsList();
+      $("cleanup-bottom-bar")?.classList.remove("visible");
     } else if (btn.dataset.view === "bookmarks") {
       invalidateData();
       renderFolderTree();
       if (selectedFolderId) renderBookmarkList(selectedFolderId);
+      $("cleanup-bottom-bar")?.classList.remove("visible");
+    } else if (btn.dataset.view === "cleanup") {
+      updateCleanupBottomBar();
     }
   });
 });
@@ -84,8 +88,84 @@ document.querySelectorAll("#cleanup-tabs button").forEach((btn) => {
     document.querySelectorAll("#view-cleanup .panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     $("panel-" + btn.dataset.tab).classList.add("active");
+    updateCleanupBottomBar();
   });
 });
+
+function updateCleanupBottomBar() {
+  const bar = $("cleanup-bottom-bar");
+  const countEl = $("cleanup-selection-count");
+  const primaryBtn = $("cleanup-primary-action");
+  if (!bar || !countEl || !primaryBtn) return;
+
+  if (!$("view-cleanup")?.classList.contains("active")) {
+    bar.classList.remove("visible");
+    return;
+  }
+
+  const activePanel = document.querySelector("#view-cleanup .panel.active");
+  if (!activePanel) {
+    bar.classList.remove("visible");
+    return;
+  }
+
+  let count = 0;
+  let actionLabel = "";
+  let primaryAction = null;
+
+  if (activePanel.id === "panel-duplicates") {
+    const checked = document.querySelectorAll("#dup-results input[data-dup-id]:checked");
+    count = checked.length;
+    actionLabel = "Delete selected";
+    primaryAction = () => $("dup-delete")?.click();
+  } else if (activePanel.id === "panel-subset") {
+    const checked = document.querySelectorAll("#subset-results input[data-subset-id]:checked");
+    count = checked.length;
+    actionLabel = "Delete selected";
+    primaryAction = () => $("subset-delete")?.click();
+  } else if (activePanel.id === "panel-broken") {
+    const checked = document.querySelectorAll("#broken-results input[data-broken-id]:checked");
+    count = checked.length;
+    actionLabel = "Delete selected";
+    primaryAction = () => $("broken-delete")?.click();
+  } else if (activePanel.id === "panel-empty") {
+    const checked = document.querySelectorAll("#empty-results input[data-empty-id]:checked");
+    count = checked.length;
+    actionLabel = "Delete selected folders";
+    primaryAction = () => $("empty-delete")?.click();
+  } else if (activePanel.id === "panel-merge") {
+    const hasResults = $("merge-results")?.querySelectorAll(".group").length > 0;
+    count = hasResults ? mergeCandidates.length : 0;
+    actionLabel = "Merge selected groups";
+    primaryAction = () => $("merge-do")?.click();
+  } else if (activePanel.id === "panel-similar-folders") {
+    const hasResults = $("similar-folders-results")?.querySelectorAll(".group").length > 0;
+    count = hasResults ? (similarFolderGroups?.length || 0) : 0;
+    actionLabel = "Merge selected groups";
+    primaryAction = () => $("similar-folders-merge")?.click();
+  }
+
+  if (count === 0) {
+    bar.classList.remove("visible");
+    return;
+  }
+
+  countEl.textContent = count === 1 ? "1 selected" : `${count} selected`;
+  primaryBtn.textContent = actionLabel;
+  primaryBtn.onclick = primaryAction;
+  bar.classList.add("visible");
+}
+
+$("cleanup-deselect")?.addEventListener("click", () => {
+  const activePanel = document.querySelector("#view-cleanup .panel.active");
+  if (!activePanel) return;
+  const container = activePanel.querySelector(".results");
+  if (container) container.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => { cb.checked = false; });
+  activePanel.querySelectorAll("input[data-dup-select-all], input[data-subset-select-all], input[data-broken-select-all]").forEach((cb) => { cb.checked = false; });
+  updateCleanupBottomBar();
+});
+
+$("view-cleanup")?.addEventListener("change", () => updateCleanupBottomBar());
 
 // =====================================================
 // BOOKMARKS VIEW: Folder tree + bookmark list
@@ -366,10 +446,13 @@ function getSelectedIds() {
 
 function updateSelectionCount() {
   const ids = getSelectedIds();
-  $("selection-count").textContent = `${ids.length} selected`;
-  $("bottom-bar").classList.toggle("visible", ids.length > 0);
+  const countEl = $("selection-count");
+  const bar = $("bottom-bar");
+  if (countEl) countEl.textContent = `${ids.length} selected`;
+  if (bar) bar.classList.toggle("visible", ids.length > 0);
   const allCbs = document.querySelectorAll('#bookmark-list input[data-bm-id]');
-  $("select-all-bm").checked = allCbs.length > 0 && ids.length === allCbs.length;
+  const selectAllCb = $("select-all-bm");
+  if (selectAllCb) selectAllCb.checked = allCbs.length > 0 && ids.length === allCbs.length;
 }
 
 // --- Select all (toggle: select all or deselect all) ---
@@ -392,7 +475,7 @@ $("select-all-bm").addEventListener("change", function () {
 });
 
 // --- Deselect all ---
-$("bulk-deselect").addEventListener("click", () => {
+$("bulk-deselect")?.addEventListener("click", () => {
   document.querySelectorAll('#bookmark-list input[data-bm-id]:checked').forEach((cb) => {
     cb.checked = false;
     const row = cb.closest(".bookmark-row");
@@ -402,7 +485,7 @@ $("bulk-deselect").addEventListener("click", () => {
 });
 
 // --- Bulk delete ---
-$("bulk-delete").addEventListener("click", async () => {
+$("bulk-delete")?.addEventListener("click", async () => {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
   if (!confirm(`Delete ${ids.length} selected bookmark(s)? This cannot be undone.`)) return;
@@ -811,7 +894,7 @@ $("import-tags-btn")?.addEventListener("click", async () => {
 // --- Bulk move ---
 let moveTargetId = null;
 
-$("bulk-move").addEventListener("click", async () => {
+$("bulk-move")?.addEventListener("click", async () => {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
   moveTargetId = null;
@@ -864,7 +947,7 @@ $("move-confirm").addEventListener("click", async () => {
 });
 
 // --- Bulk tag ---
-$("bulk-tag").addEventListener("click", async () => {
+$("bulk-tag")?.addEventListener("click", async () => {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
   const tag = prompt("Enter tag to add to selected bookmarks:");
@@ -1062,7 +1145,6 @@ $("scan-duplicates").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("dup-results").innerHTML = "";
-  $("dup-actions").style.display = "none";
 
   const data = await ensureData();
   const { bookmarks } = data;
@@ -1102,7 +1184,7 @@ $("scan-duplicates").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
-  $("dup-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("dup-delete").addEventListener("click", async () => {
@@ -1123,7 +1205,6 @@ $("scan-empty").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("empty-results").innerHTML = "";
-  $("empty-actions").style.display = "none";
 
   const { bookmarks, folders, tree } = await ensureData();
   const emptyIds = findEmptyFolders(folders, bookmarks);
@@ -1152,7 +1233,7 @@ $("scan-empty").addEventListener("click", async () => {
   $("empty-select-all").addEventListener("change", function () {
     document.querySelectorAll('input[data-empty-id]').forEach((cb) => { cb.checked = this.checked; });
   });
-  $("empty-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("empty-delete").addEventListener("click", async () => {
@@ -1173,7 +1254,6 @@ $("scan-merge").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("merge-results").innerHTML = "";
-  $("merge-actions").style.display = "none";
 
   const { folders, tree } = await ensureData();
   mergeCandidates = findMergeCandidates(folders);
@@ -1207,7 +1287,7 @@ $("scan-merge").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
-  $("merge-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("merge-do").addEventListener("click", async () => {
@@ -1247,7 +1327,6 @@ $("scan-subset").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("subset-results").innerHTML = "";
-  $("subset-actions").style.display = "none";
 
   const stripQuery = $("subset-strip-query").checked;
   const data = await ensureData();
@@ -1288,7 +1367,7 @@ $("scan-subset").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
-  $("subset-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("subset-delete").addEventListener("click", async () => {
@@ -1309,7 +1388,6 @@ $("scan-similar-folders").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("similar-folders-results").innerHTML = "";
-  $("similar-folders-actions").style.display = "none";
 
   const { folders, tree } = await ensureData();
   similarFolderGroups = findSimilarFolderGroups(folders, tree);
@@ -1342,7 +1420,7 @@ $("scan-similar-folders").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
-  $("similar-folders-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("similar-folders-merge").addEventListener("click", async () => {
@@ -1391,7 +1469,6 @@ $("scan-broken").addEventListener("click", async () => {
   status.textContent = "Requesting permission…";
   status.className = "loading";
   $("broken-results").innerHTML = "";
-  $("broken-actions").style.display = "none";
   progressDiv.style.display = "none";
 
   const granted = await chrome.permissions.request({ origins: ["<all_urls>"] });
@@ -1466,7 +1543,7 @@ $("scan-broken").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
-  $("broken-actions").style.display = "block";
+  updateCleanupBottomBar();
 });
 
 $("broken-delete").addEventListener("click", async () => {
@@ -1477,6 +1554,5 @@ $("broken-delete").addEventListener("click", async () => {
   invalidateData();
   showToast(`Deleted ${checked.length} bookmark(s).`);
   $("broken-results").innerHTML = "";
-  $("broken-actions").style.display = "none";
   $("broken-status").textContent = `Deleted ${checked.length}. Run scan again to recheck.`;
 });
