@@ -133,6 +133,14 @@ Chrome extension for cleaning bookmarks: duplicates, empty folders, mergeable fo
 
 ---
 
+## Roadmap (next)
+
+1. **Cleanup result row consistency** — Hide edit/copy icons in cleanup panels (duplicates, similar URLs, broken) via CSS so bookmark results match main list layout but with fewer actions; reduces visual noise in cleanup.
+2. **Adjustable sidebar** — Make the Bookmarks-tab folder sidebar width user-resizable (drag handle); persist width in localStorage.
+3. **Wrap bookmark name/URL** — Ensure bookmark list and cleanup rows wrap title and URL to available space with no horizontal scrollbar (overflow-x: hidden, min-width: 0, word-break/overflow-wrap where needed).
+
+---
+
 ## Architecture (evolving)
 
 ```
