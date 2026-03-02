@@ -245,6 +245,12 @@ function buildFolderNode(node) {
     ${deleteBtn}
   `;
 
+  if (!isRoot) {
+    row.draggable = true;
+    row.dataset.dragId = node.id;
+    row.dataset.dragType = "folder";
+  }
+
   row.addEventListener("click", (e) => {
     if (e.target.closest(".folder-delete") || e.target.closest(".folder-edit") || e.target.closest(".folder-name")?.isContentEditable) return;
     e.stopPropagation();
@@ -444,6 +450,189 @@ $("folder-tree")?.addEventListener("click", (e) => {
   });
 });
 
+// --- Drag and drop (Group 3): reorder in list, move to folder ---
+let dragState = null; // { id, type, sourceParentId } set in dragstart
+let listDropIndex = null;
+let dropIndicatorEl = null;
+
+function listRows() {
+  const list = $("bookmark-list");
+  if (!list) return [];
+  return Array.from(list.children).filter((el) => el.classList.contains("bookmark-row") || el.classList.contains("folder-entry"));
+}
+
+function updateListDropIndicator(index) {
+  const rows = listRows();
+  if (index == null || index < 0 || index > rows.length) {
+    if (dropIndicatorEl) {
+      dropIndicatorEl.remove();
+      dropIndicatorEl = null;
+    }
+    return;
+  }
+  const list = $("bookmark-list");
+  if (!dropIndicatorEl) {
+    dropIndicatorEl = document.createElement("div");
+    dropIndicatorEl.className = "drop-indicator";
+  }
+  if (index >= rows.length) {
+    list.appendChild(dropIndicatorEl);
+  } else {
+    list.insertBefore(dropIndicatorEl, rows[index]);
+  }
+}
+
+function clearListDropIndicator() {
+  listDropIndex = null;
+  if (dropIndicatorEl) {
+    dropIndicatorEl.remove();
+    dropIndicatorEl = null;
+  }
+}
+
+function clearFolderDropTargets() {
+  document.querySelectorAll(".folder-row.drop-target").forEach((r) => r.classList.remove("drop-target"));
+}
+
+$("bookmark-list")?.addEventListener("dragstart", (e) => {
+  const row = e.target.closest(".bookmark-row, .folder-entry");
+  if (!row || !row.draggable) return;
+  const id = row.dataset.dragId;
+  const type = row.dataset.dragType;
+  if (!id || !type) return;
+  dragState = { id, type, sourceParentId: selectedFolderId || null };
+  e.dataTransfer.setData("text/plain", JSON.stringify(dragState));
+  e.dataTransfer.effectAllowed = "move";
+  row.classList.add("dragging");
+});
+
+$("bookmark-list")?.addEventListener("dragend", (e) => {
+  document.querySelectorAll(".bookmark-row.dragging, .folder-entry.dragging").forEach((r) => r.classList.remove("dragging"));
+  dragState = null;
+  clearListDropIndicator();
+});
+
+$("bookmark-list")?.addEventListener("dragover", (e) => {
+  if (!dragState) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  clearFolderDropTargets();
+  const list = $("bookmark-list");
+  const rows = listRows();
+  if (rows.length === 0) {
+    listDropIndex = 0;
+    updateListDropIndicator(0);
+    return;
+  }
+  const rect = list.getBoundingClientRect();
+  const y = e.clientY;
+  let idx = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i].getBoundingClientRect();
+    if (y < r.top + r.height / 2) {
+      idx = i;
+      break;
+    }
+    idx = i + 1;
+  }
+  listDropIndex = idx;
+  updateListDropIndicator(idx);
+});
+
+$("bookmark-list")?.addEventListener("dragleave", (e) => {
+  if (!$("bookmark-list")?.contains(e.relatedTarget)) {
+    clearListDropIndicator();
+  }
+});
+
+$("bookmark-list")?.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
+  if (!state?.id) return;
+  const targetParentId = selectedFolderId || "1";
+  const targetIndex = listDropIndex != null ? listDropIndex : listRows().length;
+  clearListDropIndicator();
+  clearFolderDropTargets();
+  dragState = null;
+  try {
+    if (state.sourceParentId === targetParentId) {
+      await chrome.bookmarks.move(state.id, { index: targetIndex });
+    } else {
+      await chrome.bookmarks.move(state.id, { parentId: targetParentId, index: targetIndex });
+    }
+    invalidateData();
+    await renderFolderTree();
+    await renderBookmarkList(targetParentId);
+    showToast("Moved.");
+  } catch (err) {
+    showToast("Move failed: " + err.message);
+  }
+});
+
+$("folder-tree")?.addEventListener("dragstart", (e) => {
+  const row = e.target.closest(".folder-row");
+  if (!row || !row.draggable) return;
+  const id = row.dataset.dragId;
+  if (!id) return;
+  dragState = { id, type: "folder", sourceParentId: null };
+  e.dataTransfer.setData("text/plain", JSON.stringify(dragState));
+  e.dataTransfer.effectAllowed = "move";
+  row.classList.add("dragging");
+});
+
+$("folder-tree")?.addEventListener("dragend", (e) => {
+  document.querySelectorAll(".folder-row.dragging").forEach((r) => r.classList.remove("dragging"));
+  dragState = null;
+  clearFolderDropTargets();
+});
+
+$("folder-tree")?.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  const row = e.target.closest(".folder-row");
+  if (!row || row.dataset.folderId === "0") return;
+  const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
+  if (!state?.id) return;
+  const targetFolderId = row.dataset.folderId;
+  if (state.type === "folder" && state.id === targetFolderId) return;
+  e.dataTransfer.dropEffect = "move";
+  clearListDropIndicator();
+  clearFolderDropTargets();
+  row.classList.add("drop-target");
+});
+
+$("folder-tree")?.addEventListener("dragleave", (e) => {
+  if (!$("folder-tree")?.contains(e.relatedTarget)) clearFolderDropTargets();
+});
+
+$("folder-tree")?.addEventListener("drop", async (e) => {
+  const row = e.target.closest(".folder-row");
+  if (!row || row.dataset.folderId === "0") return;
+  e.preventDefault();
+  const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
+  if (!state?.id) return;
+  const targetFolderId = row.dataset.folderId;
+  if (state.type === "folder") {
+    const data = await ensureData();
+    const descendants = getCleanupScopeFolderIds(state.id, data.folders || []);
+    if (descendants.has(targetFolderId)) {
+      showToast("Cannot move a folder into itself or its subfolder.");
+      clearFolderDropTargets();
+      return;
+    }
+  }
+  clearFolderDropTargets();
+  dragState = null;
+  try {
+    await chrome.bookmarks.move(state.id, { parentId: targetFolderId });
+    invalidateData();
+    await renderFolderTree();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    showToast("Moved.");
+  } catch (err) {
+    showToast("Move failed: " + err.message);
+  }
+});
+
 function applyBookmarkSort(items, allTags) {
   const sorted = [...items];
   const getBase = (bm) => parseTitle(bm.title).baseTitle;
@@ -495,6 +684,9 @@ async function renderBookmarkList(folderId) {
     const entry = document.createElement("div");
     entry.className = "folder-entry";
     entry.dataset.folderId = folder.id;
+    entry.draggable = true;
+    entry.dataset.dragId = folder.id;
+    entry.dataset.dragType = "folder";
     entry.innerHTML = `
       <span class="folder-icon" aria-hidden="true">${FOLDER_OUTLINE_SVG}</span>
       <span class="folder-entry-name">${escapeHtml(folder.title)}</span>
@@ -518,6 +710,9 @@ async function renderBookmarkList(folderId) {
     const row = document.createElement("div");
     row.className = "bookmark-row";
     row.dataset.id = bm.id;
+    row.draggable = true;
+    row.dataset.dragId = bm.id;
+    row.dataset.dragType = "bookmark";
     const tagPills = tags.map((t) => tagPillHtml(bm.id, t)).join("");
     row.innerHTML = `
       <input type="checkbox" data-bm-id="${bm.id}" />
