@@ -8,6 +8,7 @@ let selectedFolderId = null;
 let bookmarkSort = "title-asc";
 
 const FOLDER_OUTLINE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+const TRASH_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
 function tagToStyle(tag) {
   let h = 0;
@@ -234,15 +235,13 @@ function buildFolderNode(node) {
   const isMixed = hasSubfolders && bookmarkCount > 0;
   const expanded = hasSubfolders && isFolderExpanded(node.id);
   const isRoot = node.id === "0";
-  const editBtn = isRoot ? "" : `<button type="button" class="folder-edit" title="Rename folder" aria-label="Rename folder">✎</button>`;
-  const deleteBtn = isRoot ? "" : `<button type="button" class="folder-delete" title="Delete folder" aria-label="Delete folder">⌫</button>`;
+  const menuBtn = isRoot ? "" : `<button type="button" class="folder-menu-btn" title="Folder menu" aria-label="Folder menu">⋮</button>`;
 
   row.innerHTML = `
     <span class="arrow">${hasSubfolders ? (expanded ? "▼" : "▶") : ""}</span>
     <span class="folder-name">${escapeHtml(node.title || "Bookmarks")}</span>
-    ${editBtn}
     <span class="folder-count">${isMixed || bookmarkCount === 0 ? "" : bookmarkCount}</span>
-    ${deleteBtn}
+    ${menuBtn}
   `;
 
   if (!isRoot) {
@@ -252,7 +251,7 @@ function buildFolderNode(node) {
   }
 
   row.addEventListener("click", (e) => {
-    if (e.target.closest(".folder-delete") || e.target.closest(".folder-edit") || e.target.closest(".folder-name")?.isContentEditable) return;
+    if (e.target.closest(".folder-menu-btn") || e.target.closest(".folder-name")?.isContentEditable) return;
     e.stopPropagation();
     selectFolder(node.id);
     if (hasSubfolders) {
@@ -403,15 +402,6 @@ $("folder-tree")?.addEventListener("dblclick", (e) => {
   startFolderRename(nameEl);
 });
 
-$("folder-tree")?.addEventListener("click", (e) => {
-  const editBtn = e.target.closest(".folder-edit");
-  if (!editBtn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const nameEl = editBtn.closest(".folder-row")?.querySelector(".folder-name");
-  if (nameEl) startFolderRename(nameEl);
-});
-
 async function deleteFolderRecursive(id) {
   const children = await chrome.bookmarks.getChildren(id);
   for (const c of children) {
@@ -421,33 +411,39 @@ async function deleteFolderRecursive(id) {
   await chrome.bookmarks.remove(id);
 }
 
+function getFolderRowMenuItems(row) {
+  const folderId = row.dataset.folderId;
+  const name = row.querySelector(".folder-name")?.textContent?.trim() || "folder";
+  const nameEl = row.querySelector(".folder-name");
+  return [
+    { label: "Rename", action: () => { if (nameEl) startFolderRename(nameEl); } },
+    { label: "Delete", action: async () => {
+      const msg = `Delete "${name}" and its contents? This cannot be undone.`;
+      if (!confirm(msg)) return;
+      try {
+        await deleteFolderRecursive(folderId);
+        invalidateData();
+        if (selectedFolderId === folderId) {
+          selectedFolderId = null;
+          $("bookmark-list").innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
+          document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
+        }
+        await renderFolderTree();
+        showToast("Folder deleted.");
+      } catch (err) { showToast("Delete failed: " + err.message); }
+    } },
+  ];
+}
+
 $("folder-tree")?.addEventListener("click", (e) => {
-  const btn = e.target.closest(".folder-delete");
-  if (!btn) return;
+  const menuBtn = e.target.closest(".folder-menu-btn");
+  if (!menuBtn) return;
   e.preventDefault();
   e.stopPropagation();
-  const row = btn.closest(".folder-row");
-  const folderId = row?.dataset.folderId;
-  if (!folderId || folderId === "0") return;
-  const folderName = row.querySelector(".folder-name")?.textContent?.trim() || "this folder";
-  chrome.bookmarks.getChildren(folderId).then((children) => {
-    const count = children.length;
-    const msg = count === 0
-      ? `Delete "${folderName}"?`
-      : `Delete "${folderName}" and its ${count} item(s)? This cannot be undone.`;
-    if (!confirm(msg)) return;
-    deleteFolderRecursive(folderId).then(async () => {
-      invalidateData();
-      if (selectedFolderId === folderId) {
-        selectedFolderId = null;
-        const list = $("bookmark-list");
-        list.innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
-        document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
-      }
-      await renderFolderTree();
-      showToast("Folder deleted.");
-    }).catch((err) => showToast("Failed to delete: " + err.message));
-  });
+  const row = menuBtn.closest(".folder-row");
+  if (!row || row.dataset.folderId === "0") return;
+  const rect = menuBtn.getBoundingClientRect();
+  showContextMenu(rect.left, rect.bottom + 4, getFolderRowMenuItems(row));
 });
 
 // --- Drag and drop (Group 3): reorder in list, move to folder ---
@@ -724,26 +720,7 @@ $("folder-tree")?.addEventListener("contextmenu", (e) => {
   const row = e.target.closest(".folder-row");
   if (!row || row.dataset.folderId === "0") return;
   e.preventDefault();
-  const folderId = row.dataset.folderId;
-  const name = row.querySelector(".folder-name")?.textContent?.trim() || "folder";
-  showContextMenu(e.clientX, e.clientY, [
-    { label: "Rename", action: () => { const nameEl = row.querySelector(".folder-name"); if (nameEl) startFolderRename(nameEl); } },
-    { label: "Delete", action: async () => {
-      const msg = `Delete "${name}" and its contents? This cannot be undone.`;
-      if (!confirm(msg)) return;
-      try {
-        await deleteFolderRecursive(folderId);
-        invalidateData();
-        if (selectedFolderId === folderId) {
-          selectedFolderId = null;
-          $("bookmark-list").innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
-          document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
-        }
-        await renderFolderTree();
-        showToast("Folder deleted.");
-      } catch (err) { showToast("Delete failed: " + err.message); }
-    } },
-  ]);
+  showContextMenu(e.clientX, e.clientY, getFolderRowMenuItems(row));
 });
 
 // --- Import / Export (Group 5) ---
@@ -1054,12 +1031,29 @@ async function renderBookmarkList(folderId) {
         </div>
       </div>
       <span class="bookmark-date">${dateStr}</span>
+      <button type="button" class="bookmark-delete" title="Delete bookmark" aria-label="Delete bookmark">${TRASH_ICON_SVG}</button>
     `;
     container.appendChild(row);
   }
 
   updateSelectionCount();
 }
+
+$("bookmark-list")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".bookmark-delete");
+  if (!btn) return;
+  e.preventDefault();
+  const row = btn.closest(".bookmark-row");
+  const bmId = row?.dataset.id;
+  if (!bmId) return;
+  if (!confirm("Delete this bookmark?")) return;
+  chrome.bookmarks.remove(bmId).then(async () => {
+    invalidateData();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    await renderFolderTree();
+    showToast("Deleted.");
+  }).catch((err) => showToast("Delete failed: " + err.message));
+});
 
 // --- Inline editing ---
 function startBookmarkInlineEdit(target, bmId, isTitle) {
@@ -1820,6 +1814,7 @@ async function searchBookmarks(query) {
         </div>
       </div>
       <span class="bookmark-date">${dateStr}</span>
+      <button type="button" class="bookmark-delete" title="Delete bookmark" aria-label="Delete bookmark">${TRASH_ICON_SVG}</button>
     `;
     container.appendChild(row);
   }
