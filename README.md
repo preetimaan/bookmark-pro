@@ -27,6 +27,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 - **Multi-select** — Select all, deselect all, bulk delete, move to folder, bulk tag.
 - **Search** — Filters by title, URL, or tag across all bookmarks.
 - **Sort** — Dropdown: title A–Z/Z–A, date newest/oldest, URL A–Z/Z–A. Sort is **permanent** (reorders bookmarks in Chrome via `chrome.bookmarks.move`).
+- **Import / Export** — **Export:** as HTML (Netscape format, for backup or use in other apps) or as JSON (includes tags; for backup and restore). **Import:** from HTML or from Bookmark Pro JSON; imports into the selected folder (or Bookmarks bar).
 
 ### Tags tab
 
@@ -75,7 +76,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 | **Future**      | Drag and drop reorder/move       | Done (Group 3) |
 |                 | Create/rename/delete folders     | Done (Group 1) |
 |                 | Right-click context menu        | Done (Group 4) |
-|                 | Import/export (JSON with tags)   | Pending |
+|                 | Import/export (JSON with tags)   | Done (Group 5) |
 
 ---
 

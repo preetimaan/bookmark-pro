@@ -566,6 +566,33 @@
     }
     .context-menu button:hover { background: var(--hover-bg); }
 
+    .import-export-wrap { position: relative; }
+    .export-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 4px 0;
+      min-width: 180px;
+      z-index: 50;
+    }
+    .export-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .export-menu button:hover { background: var(--hover-bg); }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -606,6 +633,15 @@
         <div class="main-toolbar-actions" style="display:flex;align-items:center;gap:8px;">
           <button type="button" class="small primary" id="add-bookmark-btn">Add bookmark</button>
           <button type="button" class="small" id="add-folder-main-btn">Add folder</button>
+          <div class="import-export-wrap" style="display:flex;align-items:center;gap:4px;">
+            <button type="button" class="small" id="export-btn">Export ▼</button>
+            <div id="export-menu" class="export-menu" style="display:none;">
+              <button type="button" data-export="html">Export as HTML</button>
+              <button type="button" data-export="json">Export as JSON (with tags)</button>
+            </div>
+            <button type="button" class="small" id="import-btn">Import</button>
+            <input type="file" id="import-file" accept=".html,.json" style="display:none;" />
+          </div>
         </div>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;color:var(--muted);">
           <input type="checkbox" id="select-all-bm" /> Select all

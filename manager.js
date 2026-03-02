@@ -746,6 +746,210 @@ $("folder-tree")?.addEventListener("contextmenu", (e) => {
   ]);
 });
 
+// --- Import / Export (Group 5) ---
+function escapeAttr(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML.replace(/"/g, "&quot;");
+}
+
+function exportBookmarksToHtml(node, depth = 0) {
+  if (!node.children) return "";
+  let out = "";
+  for (const c of node.children) {
+    if (c.url) {
+      const date = c.dateAdded ? Math.floor(c.dateAdded / 1000) : "";
+      out += `<DT><A HREF="${escapeAttr(c.url)}" ADD_DATE="${date}">${escapeHtml(c.title || c.url)}</A>\n`;
+    } else {
+      const date = c.dateAdded ? Math.floor(c.dateAdded / 1000) : "";
+      out += `<DT><H3 ADD_DATE="${date}">${escapeHtml(c.title || "Folder")}</H3>\n<DL><p>\n`;
+      out += exportBookmarksToHtml(c, depth + 1);
+      out += `</DL><p>\n`;
+    }
+  }
+  return out;
+}
+
+async function doExportHtml() {
+  const tree = await chrome.bookmarks.getTree();
+  const root = tree[0];
+  if (!root || !root.children) return "";
+  const body = exportBookmarksToHtml(root);
+  const html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+${body}</DL><p>
+`;
+  return html;
+}
+
+async function doExportJson() {
+  const tree = await chrome.bookmarks.getTree();
+  const allTags = await loadAllTags();
+  const payload = { version: 1, exportedAt: new Date().toISOString(), tree: tree[0], tags: allTags };
+  return JSON.stringify(payload, null, 2);
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("export-btn")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("export-menu");
+  menu.style.display = menu.style.display === "none" ? "block" : "none";
+});
+$("export-menu")?.addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => { $("export-menu") && ($("export-menu").style.display = "none"); });
+
+$("export-menu")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-export]");
+  if (!btn) return;
+  const format = btn.dataset.export;
+  $("export-menu").style.display = "none";
+  try {
+    if (format === "html") {
+      const html = await doExportHtml();
+      downloadBlob(html, "bookmarks.html", "text/html;charset=utf-8");
+      showToast("Exported as HTML.");
+    } else if (format === "json") {
+      const json = await doExportJson();
+      downloadBlob(json, "bookmark-pro-export.json", "application/json");
+      showToast("Exported as JSON.");
+    }
+  } catch (err) {
+    showToast("Export failed: " + err.message);
+  }
+});
+
+$("import-btn")?.addEventListener("click", () => $("import-file")?.click());
+
+async function importFromHtml(html, parentId) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const dl = doc.querySelector("DL");
+  if (!dl) return;
+
+  function collectItems(container) {
+    const items = [];
+    const dts = container.querySelectorAll(":scope > DT");
+    for (const dt of dts) {
+      const a = dt.querySelector(":scope > A");
+      const h3 = dt.querySelector(":scope > H3");
+      const nextDl = dt.querySelector(":scope > DL");
+      if (a) {
+        const href = a.getAttribute("href") || "";
+        const title = (a.textContent || "").trim() || href;
+        const addDate = a.getAttribute("ADD_DATE");
+        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
+        items.push({ type: "bookmark", title, url: href, dateAdded });
+      } else if (h3 && nextDl) {
+        const title = (h3.textContent || "").trim() || "Folder";
+        const addDate = h3.getAttribute("ADD_DATE");
+        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
+        const children = collectItems(nextDl);
+        items.push({ type: "folder", title, dateAdded, children });
+      }
+    }
+    return items;
+  }
+
+  const items = collectItems(dl);
+  for (const item of items) {
+    if (item.type === "folder") {
+      const folder = await chrome.bookmarks.create({ parentId, title: item.title, dateAdded: item.dateAdded });
+      if (item.children?.length) await importFromHtmlItems(item.children, folder.id);
+    } else {
+      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url, dateAdded: item.dateAdded });
+    }
+  }
+}
+
+async function importFromHtmlItems(items, parentId) {
+  for (const item of items) {
+    if (item.type === "folder") {
+      const folder = await chrome.bookmarks.create({ parentId, title: item.title, dateAdded: item.dateAdded });
+      if (item.children?.length) await importFromHtmlItems(item.children, folder.id);
+    } else {
+      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url, dateAdded: item.dateAdded });
+    }
+  }
+}
+
+async function importFromJson(jsonText, parentId) {
+  const data = JSON.parse(jsonText);
+  const tree = data.tree;
+  const tags = data.tags || {};
+  if (!tree || !tree.children) return;
+
+  const idMap = {}; // oldId -> newId for bookmarks
+
+  async function createNode(apiParentId, node) {
+    if (node.url) {
+      const created = await chrome.bookmarks.create({
+        parentId: apiParentId,
+        title: node.title || node.url,
+        url: node.url,
+        dateAdded: node.dateAdded,
+      });
+      idMap[node.id] = created.id;
+      return;
+    }
+    const folder = await chrome.bookmarks.create({
+      parentId: apiParentId,
+      title: node.title || "Folder",
+      dateAdded: node.dateAdded,
+    });
+    if (node.children) {
+      for (const c of node.children) await createNode(folder.id, c);
+    }
+  }
+
+  for (const child of tree.children) {
+    await createNode(parentId, child);
+  }
+
+  if (Object.keys(idMap).length > 0 && Object.keys(tags).length > 0) {
+    const allTags = await loadAllTags();
+    for (const [oldId, tagList] of Object.entries(tags)) {
+      const newId = idMap[oldId];
+      if (newId && Array.isArray(tagList) && tagList.length) allTags[newId] = tagList;
+    }
+    await saveAllTags(allTags);
+  }
+}
+
+$("import-file")?.addEventListener("change", async (e) => {
+  const input = e.target;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const parentId = selectedFolderId || "1";
+  try {
+    const text = await file.text();
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".json")) {
+      await importFromJson(text, parentId);
+      showToast("Import from JSON done.");
+    } else {
+      await importFromHtml(text, parentId);
+      showToast("Import from HTML done.");
+    }
+    invalidateData();
+    await renderFolderTree();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+  } catch (err) {
+    showToast("Import failed: " + err.message);
+  }
+});
+
 function applyBookmarkSort(items, allTags) {
   const sorted = [...items];
   const getBase = (bm) => parseTitle(bm.title).baseTitle;
