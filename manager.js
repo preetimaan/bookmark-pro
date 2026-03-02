@@ -633,6 +633,119 @@ $("folder-tree")?.addEventListener("drop", async (e) => {
   }
 });
 
+// --- Right-click context menu (Group 4) ---
+const contextMenuEl = $("context-menu");
+
+function hideContextMenu() {
+  if (contextMenuEl) contextMenuEl.style.display = "none";
+}
+
+function showContextMenu(x, y, items) {
+  if (!contextMenuEl || !items.length) return;
+  contextMenuEl.innerHTML = "";
+  items.forEach(({ label, action }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", () => { hideContextMenu(); action(); });
+    contextMenuEl.appendChild(btn);
+  });
+  contextMenuEl.style.display = "block";
+  contextMenuEl.style.left = x + "px";
+  contextMenuEl.style.top = y + "px";
+  const rect = contextMenuEl.getBoundingClientRect();
+  if (rect.right > window.innerWidth) contextMenuEl.style.left = (window.innerWidth - rect.width) + "px";
+  if (rect.bottom > window.innerHeight) contextMenuEl.style.top = (window.innerHeight - rect.height) + "px";
+  requestAnimationFrame(() => document.addEventListener("click", hideContextMenu, { once: true }));
+  document.addEventListener("keydown", function onEsc(e) {
+    if (e.key === "Escape") { hideContextMenu(); document.removeEventListener("keydown", onEsc); }
+  }, { once: true });
+}
+
+$("bookmark-list")?.addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".bookmark-row");
+  const folderEntry = e.target.closest(".folder-entry");
+  if (row) {
+    e.preventDefault();
+    const bmId = row.dataset.id;
+    const urlEl = row.querySelector(".bookmark-url");
+    const titleEl = row.querySelector(".bookmark-title");
+    const url = urlEl?.href || "";
+    const title = titleEl?.textContent?.trim() || "";
+    showContextMenu(e.clientX, e.clientY, [
+      { label: "Open in new tab", action: () => { if (url) chrome.tabs.create({ url }); } },
+      { label: "Copy URL", action: () => { if (url) navigator.clipboard.writeText(url).then(() => showToast("Copied"), () => showToast("Copy failed")); } },
+      { label: "Copy name", action: () => { if (title) navigator.clipboard.writeText(title).then(() => showToast("Copied"), () => showToast("Copy failed")); } },
+      { label: "Edit", action: () => { if (titleEl) startBookmarkInlineEdit(titleEl, bmId, true); } },
+      { label: "Delete", action: async () => {
+        if (!confirm("Delete this bookmark?")) return;
+        try {
+          await chrome.bookmarks.remove(bmId);
+          invalidateData();
+          if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+          await renderFolderTree();
+          showToast("Deleted.");
+        } catch (err) { showToast("Delete failed: " + err.message); }
+      } },
+    ]);
+    return;
+  }
+  if (folderEntry) {
+    e.preventDefault();
+    const folderId = folderEntry.dataset.folderId;
+    const name = folderEntry.querySelector(".folder-entry-name")?.textContent?.trim() || "folder";
+    showContextMenu(e.clientX, e.clientY, [
+      { label: "Open folder", action: () => selectFolder(folderId) },
+      { label: "Rename", action: () => {
+        const treeRow = document.querySelector(`.folder-row[data-folder-id="${folderId}"]`);
+        const nameEl = treeRow?.querySelector(".folder-name");
+        if (nameEl) startFolderRename(nameEl);
+      } },
+      { label: "Delete", action: async () => {
+        const msg = `Delete "${name}" and its contents? This cannot be undone.`;
+        if (!confirm(msg)) return;
+        try {
+          await deleteFolderRecursive(folderId);
+          invalidateData();
+          if (selectedFolderId === folderId) {
+            selectedFolderId = null;
+            $("bookmark-list").innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
+            document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
+          }
+          await renderFolderTree();
+          showToast("Folder deleted.");
+        } catch (err) { showToast("Delete failed: " + err.message); }
+      } },
+    ]);
+  }
+});
+
+$("folder-tree")?.addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".folder-row");
+  if (!row || row.dataset.folderId === "0") return;
+  e.preventDefault();
+  const folderId = row.dataset.folderId;
+  const name = row.querySelector(".folder-name")?.textContent?.trim() || "folder";
+  showContextMenu(e.clientX, e.clientY, [
+    { label: "Rename", action: () => { const nameEl = row.querySelector(".folder-name"); if (nameEl) startFolderRename(nameEl); } },
+    { label: "Delete", action: async () => {
+      const msg = `Delete "${name}" and its contents? This cannot be undone.`;
+      if (!confirm(msg)) return;
+      try {
+        await deleteFolderRecursive(folderId);
+        invalidateData();
+        if (selectedFolderId === folderId) {
+          selectedFolderId = null;
+          $("bookmark-list").innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
+          document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
+        }
+        await renderFolderTree();
+        showToast("Folder deleted.");
+      } catch (err) { showToast("Delete failed: " + err.message); }
+    } },
+  ]);
+});
+
 function applyBookmarkSort(items, allTags) {
   const sorted = [...items];
   const getBase = (bm) => parseTitle(bm.title).baseTitle;

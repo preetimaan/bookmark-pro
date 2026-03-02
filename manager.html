@@ -543,6 +543,29 @@
       font-size: 0.8rem;
       margin-left: 8px;
     }
+    .context-menu {
+      position: fixed;
+      z-index: 1000;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      padding: 4px 0;
+      min-width: 180px;
+    }
+    .context-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .context-menu button:hover { background: var(--hover-bg); }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -779,6 +802,7 @@
     </div>
   </div>
 
+  <div id="context-menu" class="context-menu" style="display: none;" role="menu"></div>
   <div id="toast" class="toast" style="display: none;"></div>
 
   <script src="lib/bookmarks.js"></script>
