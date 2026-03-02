@@ -19,7 +19,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 
 ### Bookmarks tab
 
-- **Folder tree** — Sidebar with expand/collapse (state kept when switching tabs).
+- **Folder tree** — Sidebar with expand/collapse (state kept when switching tabs). **New folder** button creates a folder under the selected folder (or Bookmarks bar). **Rename** via double-click on folder name or ✎ icon; **delete** via ⌫ (with confirmation; recursively removes folder and contents).
 - **Main pane** — Shows subfolders and bookmarks for the selected folder. Mixed folders list both. Content wraps (no horizontal scroll). Content wraps (no horizontal scroll).
 - **Inline edit** — Double-click title or URL to edit, or click ✎ next to name or URL; tags stay in sync. **Copy** (⎘) next to name and URL to copy to clipboard.
 - **Tags** — Add/remove tags per bookmark; pills use a hash-based color. Autocomplete from existing tags.
@@ -71,7 +71,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 |                 | Inline edit/copy in results     | Done   |
 |                 | 15s debounced rescan, clear selection after action | Done   |
 | **Future**      | Drag and drop reorder/move       | Pending |
-|                 | Create/rename/delete folders     | Pending |
+|                 | Create/rename/delete folders     | Done (Group 1) |
 |                 | Import/export (JSON with tags)   | Pending |
 
 ---

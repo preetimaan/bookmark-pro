@@ -109,8 +109,12 @@
       color: var(--muted);
       flex-shrink: 0;
     }
-    .folder-tree .folder-row .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .folder-tree .folder-row .folder-count { color: var(--muted); font-size: 0.8rem; }
+    .folder-tree .folder-row .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .folder-tree .folder-row .folder-count { color: var(--muted); font-size: 0.8rem; flex-shrink: 0; }
+    .folder-tree .folder-row .folder-edit { flex-shrink: 0; padding: 2px 4px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: 4px; font-size: 0.85rem; opacity: 0.6; }
+    .folder-tree .folder-row .folder-edit:hover { color: var(--text); opacity: 1; }
+    .folder-tree .folder-row .folder-delete { flex-shrink: 0; padding: 2px 4px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: 4px; font-size: 0.85rem; opacity: 0.6; }
+    .folder-tree .folder-row .folder-delete:hover { color: var(--text); opacity: 1; }
     .folder-tree ul { list-style: none; padding-left: 20px; }
 
     .main-area {
@@ -563,6 +567,7 @@
   <div id="view-bookmarks" class="view active">
     <div class="sidebar">
       <div class="sidebar-header">Folders</div>
+      <button type="button" class="small" id="new-folder-btn" style="margin: 0 16px 12px;">New folder</button>
       <ul class="folder-tree" id="folder-tree"></ul>
     </div>
     <div class="main-area">

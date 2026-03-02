@@ -120,6 +120,7 @@ Chrome extension for cleaning bookmarks: duplicates, empty folders, mergeable fo
 
 ## Recent UX (manager)
 
+- **Folder create/rename/delete (Group 1)** — “New folder” button in sidebar creates a folder under the selected folder (or Bookmarks bar) and starts rename. Rename: double-click folder name or click ✎; delete: click ⌫ with confirmation; delete recursively removes folder and all contents. Root folders (Bookmarks bar / Other bookmarks) cannot be renamed or deleted.
 - **Scope** — Cleanup scans can be limited to a folder: dropdown with tree-style list (indented). “All bookmarks” or pick a folder; only that subtree is scanned.
 - **Inline edit in cleanup** — Edit icon (✎) next to name and URL in duplicate/similar-URL/broken results; copy icon (⎘) next to name and URL. Double-click name also edits title.
 - **Rescan** — After edit or delete in cleanup, rescan is debounced (15s idle). No rescan if user only opens edit and cancels or saves without changing value.

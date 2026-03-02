@@ -233,14 +233,20 @@ function buildFolderNode(node) {
   const bookmarkCount = node.children.filter((c) => c.url).length;
   const isMixed = hasSubfolders && bookmarkCount > 0;
   const expanded = hasSubfolders && isFolderExpanded(node.id);
+  const isRoot = node.id === "0";
+  const editBtn = isRoot ? "" : `<button type="button" class="folder-edit" title="Rename folder" aria-label="Rename folder">✎</button>`;
+  const deleteBtn = isRoot ? "" : `<button type="button" class="folder-delete" title="Delete folder" aria-label="Delete folder">⌫</button>`;
 
   row.innerHTML = `
     <span class="arrow">${hasSubfolders ? (expanded ? "▼" : "▶") : ""}</span>
     <span class="folder-name">${escapeHtml(node.title || "Bookmarks")}</span>
+    ${editBtn}
     <span class="folder-count">${isMixed || bookmarkCount === 0 ? "" : bookmarkCount}</span>
+    ${deleteBtn}
   `;
 
   row.addEventListener("click", (e) => {
+    if (e.target.closest(".folder-delete") || e.target.closest(".folder-edit") || e.target.closest(".folder-name")?.isContentEditable) return;
     e.stopPropagation();
     selectFolder(node.id);
     if (hasSubfolders) {
@@ -276,6 +282,130 @@ function selectFolder(folderId) {
   });
   renderBookmarkList(folderId);
 }
+
+// --- Folder create / rename / delete (Group 1: Chrome manager parity) ---
+$("new-folder-btn")?.addEventListener("click", async () => {
+  const parentId = selectedFolderId || "1";
+  try {
+    const newFolder = await chrome.bookmarks.create({ parentId, title: "New folder" });
+    invalidateData();
+    await renderFolderTree();
+    selectFolder(newFolder.id);
+    setFolderExpanded(parentId, true);
+    const row = document.querySelector(`.folder-row[data-folder-id="${newFolder.id}"]`);
+    const nameEl = row?.querySelector(".folder-name");
+    if (nameEl) startFolderRename(nameEl);
+  } catch (err) {
+    showToast("Failed to create folder: " + err.message);
+  }
+});
+
+function startFolderRename(nameEl) {
+  const row = nameEl.closest(".folder-row");
+  const folderId = row?.dataset.folderId;
+  if (!folderId || folderId === "0") return;
+  if (nameEl.isContentEditable) return;
+  const initialTitle = nameEl.textContent.trim() || "New folder";
+  nameEl.contentEditable = "true";
+  nameEl.focus();
+  nameEl.dataset.editing = "true";
+  const sel = window.getSelection();
+  sel.selectAllChildren(nameEl);
+
+  function finish() {
+    nameEl.removeAttribute("contenteditable");
+    nameEl.removeAttribute("data-editing");
+    nameEl.removeEventListener("blur", onBlur);
+    nameEl.removeEventListener("keydown", onKey);
+  }
+
+  async function save() {
+    finish();
+    const newTitle = nameEl.textContent.trim();
+    if (!newTitle) {
+      nameEl.textContent = initialTitle;
+      return;
+    }
+    try {
+      await chrome.bookmarks.update(folderId, { title: newTitle });
+      invalidateData();
+    } catch (err) {
+      showToast("Failed to rename: " + err.message);
+      nameEl.textContent = initialTitle;
+    }
+  }
+
+  function onBlur() {
+    save();
+  }
+
+  function onKey(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      nameEl.blur();
+    } else if (e.key === "Escape") {
+      finish();
+      nameEl.textContent = initialTitle;
+    }
+  }
+
+  nameEl.addEventListener("blur", onBlur, { once: true });
+  nameEl.addEventListener("keydown", onKey);
+}
+
+$("folder-tree")?.addEventListener("dblclick", (e) => {
+  const nameEl = e.target.closest(".folder-name");
+  if (!nameEl || nameEl.dataset.editing === "true") return;
+  e.stopPropagation();
+  startFolderRename(nameEl);
+});
+
+$("folder-tree")?.addEventListener("click", (e) => {
+  const editBtn = e.target.closest(".folder-edit");
+  if (!editBtn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const nameEl = editBtn.closest(".folder-row")?.querySelector(".folder-name");
+  if (nameEl) startFolderRename(nameEl);
+});
+
+async function deleteFolderRecursive(id) {
+  const children = await chrome.bookmarks.getChildren(id);
+  for (const c of children) {
+    if (c.url) await chrome.bookmarks.remove(c.id);
+    else await deleteFolderRecursive(c.id);
+  }
+  await chrome.bookmarks.remove(id);
+}
+
+$("folder-tree")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".folder-delete");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const row = btn.closest(".folder-row");
+  const folderId = row?.dataset.folderId;
+  if (!folderId || folderId === "0") return;
+  const folderName = row.querySelector(".folder-name")?.textContent?.trim() || "this folder";
+  chrome.bookmarks.getChildren(folderId).then((children) => {
+    const count = children.length;
+    const msg = count === 0
+      ? `Delete "${folderName}"?`
+      : `Delete "${folderName}" and its ${count} item(s)? This cannot be undone.`;
+    if (!confirm(msg)) return;
+    deleteFolderRecursive(folderId).then(async () => {
+      invalidateData();
+      if (selectedFolderId === folderId) {
+        selectedFolderId = null;
+        const list = $("bookmark-list");
+        list.innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
+        document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
+      }
+      await renderFolderTree();
+      showToast("Folder deleted.");
+    }).catch((err) => showToast("Failed to delete: " + err.message));
+  });
+});
 
 function applyBookmarkSort(items, allTags) {
   const sorted = [...items];
