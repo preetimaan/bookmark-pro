@@ -284,17 +284,54 @@ function selectFolder(folderId) {
 }
 
 // --- Folder create / rename / delete (Group 1: Chrome manager parity) ---
+async function createNewFolderAndEdit(parentId) {
+  const pid = parentId || selectedFolderId || "1";
+  const newFolder = await chrome.bookmarks.create({ parentId: pid, title: "New folder" });
+  invalidateData();
+  await renderFolderTree();
+  selectFolder(newFolder.id);
+  setFolderExpanded(pid, true);
+  const row = document.querySelector(`.folder-row[data-folder-id="${newFolder.id}"]`);
+  const nameEl = row?.querySelector(".folder-name");
+  if (nameEl) startFolderRename(nameEl);
+  return newFolder;
+}
+
 $("new-folder-btn")?.addEventListener("click", async () => {
+  try {
+    await createNewFolderAndEdit(selectedFolderId || "1");
+  } catch (err) {
+    showToast("Failed to create folder: " + err.message);
+  }
+});
+
+// --- Add bookmark / Add folder from manager (Group 2) ---
+$("add-bookmark-btn")?.addEventListener("click", async () => {
   const parentId = selectedFolderId || "1";
   try {
-    const newFolder = await chrome.bookmarks.create({ parentId, title: "New folder" });
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const nonExt = tabs.filter((t) => t.url && !t.url.startsWith("chrome-extension://") && !t.url.startsWith("chrome://"));
+    const tab = nonExt.find((t) => t.active) || nonExt[0];
+    if (!tab) {
+      showToast("No page to bookmark in this window.");
+      return;
+    }
+    await chrome.bookmarks.create({
+      parentId,
+      title: tab.title || tab.url || "Bookmark",
+      url: tab.url,
+    });
     invalidateData();
-    await renderFolderTree();
-    selectFolder(newFolder.id);
-    setFolderExpanded(parentId, true);
-    const row = document.querySelector(`.folder-row[data-folder-id="${newFolder.id}"]`);
-    const nameEl = row?.querySelector(".folder-name");
-    if (nameEl) startFolderRename(nameEl);
+    await renderBookmarkList(parentId);
+    showToast('Bookmark added.');
+  } catch (err) {
+    showToast("Failed to add bookmark: " + err.message);
+  }
+});
+
+$("add-folder-main-btn")?.addEventListener("click", async () => {
+  try {
+    await createNewFolderAndEdit(selectedFolderId || "1");
   } catch (err) {
     showToast("Failed to create folder: " + err.message);
   }

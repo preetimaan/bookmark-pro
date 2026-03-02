@@ -3,7 +3,7 @@
   "name": "Bookmark Pro",
   "version": "0.2.0",
   "description": "Bookmark manager with tags, cleanup tools: duplicates, empty folders, merge, similar URLs, broken links.",
-  "permissions": ["bookmarks", "storage"],
+  "permissions": ["bookmarks", "storage", "tabs"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
   "action": {
