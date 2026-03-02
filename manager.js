@@ -43,6 +43,53 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+// --- Adjustable sidebar width ---
+const SIDEBAR_WIDTH_KEY = "bookmark-pro-sidebar-width";
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 480;
+const SIDEBAR_DEFAULT = 260;
+
+function applySidebarWidth(w) {
+  const sidebar = $("bookmark-sidebar");
+  if (!sidebar) return;
+  const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w));
+  sidebar.style.width = width + "px";
+  try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width)); } catch (_) {}
+}
+
+function initSidebarResize() {
+  const sidebar = $("bookmark-sidebar");
+  const handle = $("sidebar-resize-handle");
+  const view = $("view-bookmarks");
+  if (!sidebar || !handle || !view) return;
+  try {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (saved) {
+      const w = parseInt(saved, 10);
+      if (!isNaN(w)) sidebar.style.width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)) + "px";
+    }
+  } catch (_) {}
+  handle.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebar.offsetWidth;
+    function move(ev) {
+      const dx = ev.clientX - startX;
+      applySidebarWidth(startW + dx);
+    }
+    function stop() {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", stop);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", stop);
+  });
+}
+
 // --- Load data ---
 async function ensureData() {
   if (!bookmarksData) {
@@ -1862,6 +1909,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 // --- Init ---
+initSidebarResize();
 renderFolderTree();
 
 // =====================================================

@@ -77,12 +77,22 @@
     }
     .sidebar {
       width: 260px;
-      min-width: 200px;
+      min-width: 180px;
+      max-width: 480px;
       border-right: 1px solid var(--border);
       overflow-y: auto;
       padding: 12px 0;
       flex-shrink: 0;
     }
+    .sidebar-resize-handle {
+      width: 6px;
+      flex-shrink: 0;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .sidebar-resize-handle:hover { background: var(--border); }
+    .sidebar-resize-handle:active { background: var(--accent); }
     .sidebar-header {
       padding: 0 16px 12px;
       font-size: 0.85rem;
@@ -628,11 +638,12 @@
 
   <!-- Bookmarks view -->
   <div id="view-bookmarks" class="view active">
-    <div class="sidebar">
+    <div class="sidebar" id="bookmark-sidebar">
       <div class="sidebar-header">Folders</div>
       <button type="button" class="small" id="new-folder-btn" style="margin: 0 16px 12px;">New folder</button>
       <ul class="folder-tree" id="folder-tree"></ul>
     </div>
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle" title="Drag to resize"></div>
     <div class="main-area">
       <div class="main-toolbar">
         <div class="main-toolbar-actions" style="display:flex;align-items:center;gap:8px;">
