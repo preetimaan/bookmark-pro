@@ -479,6 +479,7 @@ function getFolderRowMenuItems(row) {
   const nameEl = row.querySelector(".folder-name");
   return [
     { label: "Rename", action: () => { if (nameEl) startFolderRename(nameEl); } },
+    { label: "Merge into folder…", action: () => openMoveModalForMerge(folderId) },
     { label: "Delete", action: async () => {
       const msg = `Delete "${name}" and its contents? This cannot be undone.`;
       if (!confirm(msg)) return;
@@ -1696,13 +1697,34 @@ $("import-tags-btn")?.addEventListener("click", async () => {
   showToast("Imported tags from " + updated + " bookmark(s). Titles use #tag format.");
 });
 
-// --- Bulk move ---
+// --- Bulk move / Merge into folder ---
 let moveTargetId = null;
+let moveModalMergeFolderId = null;
+
+function setMoveModalMode(mode) {
+  const titleEl = $("move-modal-title");
+  const btnEl = $("move-confirm");
+  if (titleEl) titleEl.textContent = mode === "merge" ? "Merge into folder" : "Move to folder";
+  if (btnEl) btnEl.textContent = mode === "merge" ? "Merge here" : "Move here";
+}
+
+async function openMoveModalForMerge(sourceFolderId) {
+  moveModalMergeFolderId = sourceFolderId;
+  moveTargetId = null;
+  setMoveModalMode("merge");
+  const { tree } = await ensureData();
+  const container = $("move-folder-tree");
+  container.innerHTML = "";
+  renderMoveFolderTree(container, tree, 0, sourceFolderId);
+  $("move-modal").classList.add("visible");
+}
 
 $("bulk-move")?.addEventListener("click", async () => {
   const ids = getSelectedIds();
   if (ids.length === 0) return;
   moveTargetId = null;
+  moveModalMergeFolderId = null;
+  setMoveModalMode("move");
   const { tree } = await ensureData();
   const container = $("move-folder-tree");
   container.innerHTML = "";
@@ -1710,36 +1732,65 @@ $("bulk-move")?.addEventListener("click", async () => {
   $("move-modal").classList.add("visible");
 });
 
-function renderMoveFolderTree(container, node, depth) {
-  if (node.children) {
-    for (const child of node.children) {
-      if (!child.children) continue;
-      const div = document.createElement("div");
-      div.className = "move-tree-item";
-      div.style.paddingLeft = (12 + depth * 20) + "px";
-      div.textContent = child.title || "Bookmarks";
-      div.dataset.folderId = child.id;
-      div.addEventListener("click", () => {
-        container.querySelectorAll(".move-tree-item").forEach((d) => d.classList.remove("selected"));
-        div.classList.add("selected");
-        moveTargetId = child.id;
-      });
-      container.appendChild(div);
-      renderMoveFolderTree(container, child, depth + 1);
-    }
+function renderMoveFolderTree(container, node, depth, excludeFolderId) {
+  if (!node || !node.children) return;
+  for (const child of node.children) {
+    if (!child.children) continue;
+    if (excludeFolderId && String(child.id) === String(excludeFolderId)) continue;
+    const div = document.createElement("div");
+    div.className = "move-tree-item";
+    div.style.paddingLeft = (12 + depth * 20) + "px";
+    div.textContent = child.title || "Bookmarks";
+    div.dataset.folderId = child.id;
+    div.addEventListener("click", () => {
+      container.querySelectorAll(".move-tree-item").forEach((d) => d.classList.remove("selected"));
+      div.classList.add("selected");
+      moveTargetId = child.id;
+    });
+    container.appendChild(div);
+    renderMoveFolderTree(container, child, depth + 1, excludeFolderId);
   }
 }
 
 $("move-cancel").addEventListener("click", () => {
+  moveModalMergeFolderId = null;
+  setMoveModalMode("move");
   $("move-modal").classList.remove("visible");
 });
 
 $("move-modal").addEventListener("click", (e) => {
-  if (e.target === $("move-modal")) $("move-modal").classList.remove("visible");
+  if (e.target === $("move-modal")) {
+    moveModalMergeFolderId = null;
+    setMoveModalMode("move");
+    $("move-modal").classList.remove("visible");
+  }
 });
 
 $("move-confirm").addEventListener("click", async () => {
   if (!moveTargetId) { showToast("Select a folder first."); return; }
+  if (moveModalMergeFolderId) {
+    const sourceId = moveModalMergeFolderId;
+    const targetId = moveTargetId;
+    if (sourceId === targetId) { showToast("Cannot merge a folder into itself."); return; }
+    const result = await mergeFolderIntoWithDedupe(sourceId, targetId);
+    await chrome.bookmarks.remove(sourceId);
+    moveModalMergeFolderId = null;
+    setMoveModalMode("move");
+    $("move-modal").classList.remove("visible");
+    invalidateData();
+    if (selectedFolderId === sourceId) {
+      selectedFolderId = null;
+      $("bookmark-list").innerHTML = '<div class="empty-state">Select a folder to view bookmarks.</div>';
+      document.querySelectorAll(".folder-row").forEach((r) => r.classList.remove("selected"));
+    }
+    await renderFolderTree();
+    if (selectedFolderId) await renderBookmarkList(selectedFolderId);
+    const msg = result.skippedDuplicates > 0
+      ? `Merged folder; skipped ${result.skippedDuplicates} duplicate bookmark(s).`
+      : "Merged folder.";
+    showToast(msg);
+    return;
+  }
   const ids = getSelectedIds();
   for (const id of ids) {
     await chrome.bookmarks.move(id, { parentId: moveTargetId });
@@ -1930,6 +1981,63 @@ renderFolderTree();
 // =====================================================
 // CLEANUP TOOLS (ported from options.js)
 // =====================================================
+
+/** Normalize URL for duplicate comparison (e.g. strip trailing slash). */
+function normalizeUrlForDedupe(url) {
+  if (!url || typeof url !== "string") return "";
+  let u = url.trim();
+  if (u.endsWith("/") && u.length > 1) u = u.slice(0, -1);
+  return u;
+}
+
+/**
+ * Merge source folder into keepId: move children, skip duplicate URLs (remove duplicate), merge same-name subfolders.
+ * Returns { moved, skippedDuplicates, mergedSubfolders }.
+ */
+async function mergeFolderIntoWithDedupe(sourceFolderId, keepId) {
+  const children = await chrome.bookmarks.getChildren(sourceFolderId);
+  const keepChildren = await chrome.bookmarks.getChildren(keepId);
+  const existingUrls = new Set();
+  const existingFolderTitles = new Map();
+  for (const c of keepChildren) {
+    if (c.url) existingUrls.add(normalizeUrlForDedupe(c.url));
+    else {
+      const key = ((c.title || "").trim() || "(No name)").toLowerCase();
+      existingFolderTitles.set(key, c.id);
+    }
+  }
+  let moved = 0;
+  let skippedDuplicates = 0;
+  let mergedSubfolders = 0;
+  for (const child of children) {
+    if (child.url) {
+      const norm = normalizeUrlForDedupe(child.url);
+      if (existingUrls.has(norm)) {
+        await chrome.bookmarks.remove(child.id);
+        skippedDuplicates++;
+      } else {
+        await chrome.bookmarks.move(child.id, { parentId: keepId });
+        existingUrls.add(norm);
+        moved++;
+      }
+    } else {
+      const titleKey = ((child.title || "").trim() || "(No name)").toLowerCase();
+      const existingId = existingFolderTitles.get(titleKey);
+      if (existingId) {
+        const sub = await mergeFolderIntoWithDedupe(child.id, existingId);
+        moved += sub.moved;
+        skippedDuplicates += sub.skippedDuplicates;
+        mergedSubfolders += sub.mergedSubfolders + 1;
+        await chrome.bookmarks.remove(child.id);
+      } else {
+        await chrome.bookmarks.move(child.id, { parentId: keepId });
+        existingFolderTitles.set(titleKey, child.id);
+        moved++;
+      }
+    }
+  }
+  return { moved, skippedDuplicates, mergedSubfolders };
+}
 
 /** Return folder ids that are the given folder or its descendants. If folderId is empty/null, return all folder ids. */
 function getCleanupScopeFolderIds(folderId, folders) {
@@ -2154,11 +2262,11 @@ $("scan-merge").addEventListener("click", async () => {
   const scopeId = $("cleanup-scope-folder")?.value || null;
   const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
   const scopeFolders = folders.filter((f) => scopeFolderIds.has(f.id));
-  mergeCandidates = findMergeCandidates(scopeFolders);
+  mergeCandidates = findSimilarFolderGroups(scopeFolders, tree);
 
   status.textContent = mergeCandidates.length === 0
-    ? "No merge candidates found."
-    : `Found ${mergeCandidates.length} group(s) of same-name folders.`;
+    ? "No duplicate folder names found."
+    : `Found ${mergeCandidates.length} group(s) of same-name folders (across the tree).`;
   status.className = "";
   if (mergeCandidates.length === 0) return;
 
@@ -2166,14 +2274,13 @@ $("scan-merge").addEventListener("click", async () => {
   mergeCandidates.forEach((group, gi) => {
     const div = document.createElement("div");
     div.className = "group";
-    const paths = group.folderIds.map((id) => getFolderPath(id, folders, tree));
-    div.innerHTML = `<div class="group-header"><strong>${escapeHtml(group.title)}</strong> (${group.folderIds.length} folders) — choose one to keep.</div>`;
-    group.folderIds.forEach((folderId, fi) => {
+    div.innerHTML = `<div class="group-header"><strong>${escapeHtml(group.title)}</strong> (${group.folders.length} folders) — choose one to keep.</div>`;
+    group.folders.forEach((folder, fi) => {
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
       itemDiv.innerHTML = `
-        <input type="radio" name="merge-keep-${gi}" value="${folderId}" ${fi === 0 ? "checked" : ""} />
-        <div><span class="item-title">${escapeHtml(paths[fi])}</span><span class="merge-target">${fi === 0 ? " (keep this one)" : ""}</span></div>
+        <input type="radio" name="merge-keep-${gi}" value="${folder.id}" ${fi === 0 ? "checked" : ""} />
+        <div><span class="item-title">${escapeHtml(folder.path)}</span><span class="merge-target">${fi === 0 ? " (keep this one)" : ""}</span></div>
       `;
       itemDiv.querySelector("input").addEventListener("change", function () {
         div.querySelectorAll("input[type=radio]").forEach((r) => {
@@ -2190,19 +2297,23 @@ $("scan-merge").addEventListener("click", async () => {
 
 $("merge-do").addEventListener("click", async () => {
   let merged = 0;
+  let skipped = 0;
   for (let gi = 0; gi < mergeCandidates.length; gi++) {
     const group = mergeCandidates[gi];
     const keepId = document.querySelector(`input[name="merge-keep-${gi}"]:checked`)?.value;
     if (!keepId) continue;
-    for (const folderId of group.folderIds.filter((id) => id !== keepId)) {
-      const children = await chrome.bookmarks.getChildren(folderId);
-      for (const child of children) await chrome.bookmarks.move(child.id, { parentId: keepId });
-      await chrome.bookmarks.remove(folderId);
+    for (const folder of group.folders.filter((f) => f.id !== keepId)) {
+      const result = await mergeFolderIntoWithDedupe(folder.id, keepId);
       merged++;
+      skipped += result.skippedDuplicates;
+      await chrome.bookmarks.remove(folder.id);
     }
   }
   invalidateData();
-  showToast(`Merged folders. Removed ${merged} duplicate folder(s).`);
+  const msg = skipped > 0
+    ? `Merged folders. Removed ${merged} duplicate folder(s); skipped ${skipped} duplicate bookmark(s).`
+    : `Merged folders. Removed ${merged} duplicate folder(s).`;
+  showToast(msg);
   $("merge-results").innerHTML = "";
   clearCleanupSelectionsAndHideBar();
   $("scan-merge").click();
@@ -2343,19 +2454,23 @@ $("scan-similar-folders").addEventListener("click", async () => {
 
 $("similar-folders-merge").addEventListener("click", async () => {
   let merged = 0;
+  let skipped = 0;
   for (let gi = 0; gi < similarFolderGroups.length; gi++) {
     const group = similarFolderGroups[gi];
     const keepId = document.querySelector(`input[name="similar-keep-${gi}"]:checked`)?.value;
     if (!keepId) continue;
     for (const folder of group.folders.filter((f) => f.id !== keepId)) {
-      const children = await chrome.bookmarks.getChildren(folder.id);
-      for (const child of children) await chrome.bookmarks.move(child.id, { parentId: keepId });
-      await chrome.bookmarks.remove(folder.id);
+      const result = await mergeFolderIntoWithDedupe(folder.id, keepId);
       merged++;
+      skipped += result.skippedDuplicates;
+      await chrome.bookmarks.remove(folder.id);
     }
   }
   invalidateData();
-  showToast(`Merged folders. Removed ${merged} folder(s).`);
+  const msg = skipped > 0
+    ? `Merged folders. Removed ${merged} folder(s); skipped ${skipped} duplicate bookmark(s).`
+    : `Merged folders. Removed ${merged} folder(s).`;
+  showToast(msg);
   $("similar-folders-results").innerHTML = "";
   clearCleanupSelectionsAndHideBar();
   $("scan-similar-folders").click();

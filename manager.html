@@ -765,7 +765,7 @@
 
     <div id="panel-merge" class="panel">
       <h2>Merge duplicate folders</h2>
-      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name under the same parent. Pick one to keep; others will be merged into it.</p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it. Duplicate bookmarks (same URL) are skipped; same-name subfolders are merged.</p>
       <div class="scan-row">
         <button type="button" class="primary" id="scan-merge">Find merge candidates</button>
         <span id="merge-status" class="loading"></span>
@@ -788,7 +788,7 @@
 
     <div id="panel-similar-folders" class="panel">
       <h2>Similar folder names</h2>
-      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it.</p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it. Duplicate bookmarks (same URL) are skipped; same-name subfolders are merged.</p>
       <div class="scan-row">
         <button type="button" class="primary" id="scan-similar-folders">Find similar folders</button>
         <span id="similar-folders-status" class="loading"></span>
@@ -826,10 +826,10 @@
     </div>
   </div>
 
-  <!-- Move-to modal -->
+  <!-- Move-to / Merge-into modal -->
   <div class="modal-backdrop" id="move-modal">
     <div class="modal">
-      <h2>Move to folder</h2>
+      <h2 id="move-modal-title">Move to folder</h2>
       <div id="move-folder-tree" style="max-height:300px; overflow-y:auto; margin-bottom:16px;"></div>
       <div class="modal-actions">
         <button type="button" class="small" id="move-cancel">Cancel</button>
