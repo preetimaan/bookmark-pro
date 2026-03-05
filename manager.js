@@ -559,7 +559,13 @@ $("bookmark-list")?.addEventListener("dragstart", (e) => {
   const id = row.dataset.dragId;
   const type = row.dataset.dragType;
   if (!id || !type) return;
-  dragState = { id, type, sourceParentId: selectedFolderId || null };
+  const selectedIds = getSelectedIds();
+  const draggingSelection = type === "bookmark" && selectedIds.length > 0 && selectedIds.includes(id);
+  if (draggingSelection && selectedIds.length > 0) {
+    dragState = { ids: selectedIds.slice(), type: "bookmark", sourceParentId: selectedFolderId || null };
+  } else {
+    dragState = { id, type, sourceParentId: selectedFolderId || null };
+  }
   e.dataTransfer.setData("text/plain", JSON.stringify(dragState));
   e.dataTransfer.effectAllowed = "move";
   row.classList.add("dragging");
@@ -607,22 +613,26 @@ $("bookmark-list")?.addEventListener("dragleave", (e) => {
 $("bookmark-list")?.addEventListener("drop", async (e) => {
   e.preventDefault();
   const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
-  if (!state?.id) return;
+  const idsToMove = state?.ids?.length ? state.ids : (state?.id ? [state.id] : []);
+  if (idsToMove.length === 0) return;
   const targetParentId = selectedFolderId || "1";
-  const targetIndex = listDropIndex != null ? listDropIndex : listRows().length;
+  let targetIndex = listDropIndex != null ? listDropIndex : listRows().length;
   clearListDropIndicator();
   clearFolderDropTargets();
   dragState = null;
   try {
-    if (state.sourceParentId === targetParentId) {
-      await chrome.bookmarks.move(state.id, { index: targetIndex });
-    } else {
-      await chrome.bookmarks.move(state.id, { parentId: targetParentId, index: targetIndex });
+    for (const id of idsToMove) {
+      if (state.sourceParentId === targetParentId) {
+        await chrome.bookmarks.move(id, { index: targetIndex });
+      } else {
+        await chrome.bookmarks.move(id, { parentId: targetParentId, index: targetIndex });
+      }
+      targetIndex += 1;
     }
     invalidateData();
     await renderFolderTree();
     await renderBookmarkList(targetParentId);
-    showToast("Moved.");
+    showToast(idsToMove.length > 1 ? `Moved ${idsToMove.length} items.` : "Moved.");
   } catch (err) {
     showToast("Move failed: " + err.message);
   }
@@ -650,7 +660,8 @@ $("folder-tree")?.addEventListener("dragover", (e) => {
   const row = e.target.closest(".folder-row");
   if (!row || row.dataset.folderId === "0") return;
   const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
-  if (!state?.id) return;
+  const hasIds = (state?.ids?.length > 0) || state?.id;
+  if (!hasIds) return;
   const targetFolderId = row.dataset.folderId;
   if (state.type === "folder" && state.id === targetFolderId) return;
   e.dataTransfer.dropEffect = "move";
@@ -668,11 +679,12 @@ $("folder-tree")?.addEventListener("drop", async (e) => {
   if (!row || row.dataset.folderId === "0") return;
   e.preventDefault();
   const state = dragState || (() => { try { return JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return null; } })();
-  if (!state?.id) return;
+  const idsToMove = state?.ids?.length ? state.ids : (state?.id ? [state.id] : []);
+  if (idsToMove.length === 0) return;
   const targetFolderId = row.dataset.folderId;
-  if (state.type === "folder") {
+  if (state.type === "folder" && idsToMove.length === 1) {
     const data = await ensureData();
-    const descendants = getCleanupScopeFolderIds(state.id, data.folders || []);
+    const descendants = getCleanupScopeFolderIds(idsToMove[0], data.folders || []);
     if (descendants.has(targetFolderId)) {
       showToast("Cannot move a folder into itself or its subfolder.");
       clearFolderDropTargets();
@@ -682,11 +694,13 @@ $("folder-tree")?.addEventListener("drop", async (e) => {
   clearFolderDropTargets();
   dragState = null;
   try {
-    await chrome.bookmarks.move(state.id, { parentId: targetFolderId });
+    for (const id of idsToMove) {
+      await chrome.bookmarks.move(id, { parentId: targetFolderId });
+    }
     invalidateData();
     await renderFolderTree();
     if (selectedFolderId) await renderBookmarkList(selectedFolderId);
-    showToast("Moved.");
+    showToast(idsToMove.length > 1 ? `Moved ${idsToMove.length} items.` : "Moved.");
   } catch (err) {
     showToast("Move failed: " + err.message);
   }
