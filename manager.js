@@ -2125,6 +2125,8 @@ $("scan-duplicates").addEventListener("click", async () => {
   status.textContent = "Scanning…";
   status.className = "loading";
   $("dup-results").innerHTML = "";
+  const actionsRow = $("dup-select-actions");
+  if (actionsRow) actionsRow.style.display = "none";
 
   const data = await ensureData();
   const { bookmarks, folders } = data;
@@ -2145,6 +2147,16 @@ $("scan-duplicates").addEventListener("click", async () => {
   status.className = "";
   if (duplicateGroups.length === 0) return;
 
+  const scopeFolders = (data.folders || []).filter((f) => scopeFolderIds.has(f.id));
+  const folderOpts = scopeFolders
+    .map((f) => ({ value: f.id, label: getFolderPath(f.id, folderMap) || f.id }))
+    .sort((a, b) => (a.label || "").localeCompare(b.label || ""));
+  const selFolder = $("dup-select-folder");
+  if (selFolder) {
+    selFolder.innerHTML = '<option value="">— Folder —</option>' + folderOpts.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
+  }
+  if (actionsRow) actionsRow.style.display = "flex";
+
   const container = $("dup-results");
   duplicateGroups.forEach((group, gi) => {
     const div = document.createElement("div");
@@ -2153,10 +2165,11 @@ $("scan-duplicates").addEventListener("click", async () => {
     group.items.forEach((item, ii) => {
       const folderPath = getFolderPath(item.parentId, folderMap);
       const folderPathHtml = folderPath ? `<div class="item-folder-path">${escapeHtml(folderPath)}</div>` : "";
+      const dateVal = item.dateAdded != null ? String(item.dateAdded) : "";
       const itemDiv = document.createElement("div");
       itemDiv.className = "item";
       itemDiv.innerHTML = `
-        <input type="checkbox" data-dup-id="${item.id}" data-group="${gi}" data-item="${ii}" />
+        <input type="checkbox" data-dup-id="${item.id}" data-dup-parent-id="${escapeHtml(item.parentId || "")}" data-dup-date="${escapeHtml(dateVal)}" data-group="${gi}" data-item="${ii}" />
         <div>
           <div class="item-title-wrap">
             <div class="item-title" data-item-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -2175,6 +2188,43 @@ $("scan-duplicates").addEventListener("click", async () => {
     });
     container.appendChild(div);
   });
+  updateCleanupBottomBar();
+});
+
+$("dup-select-in-folder")?.addEventListener("click", async () => {
+  const folderId = $("dup-select-folder")?.value?.trim();
+  if (!folderId) { showToast("Select a folder first."); return; }
+  const data = await ensureData();
+  const ids = getCleanupScopeFolderIds(folderId, data.folders || []);
+  const container = $("dup-results");
+  if (!container) return;
+  container.querySelectorAll("input[data-dup-id]").forEach((cb) => {
+    cb.checked = ids.has(cb.dataset.dupParentId || "");
+  });
+  container.querySelectorAll(".group").forEach((group) => syncSelectAll(group));
+  updateCleanupBottomBar();
+});
+
+$("dup-select-all-but-oldest")?.addEventListener("click", () => {
+  const container = $("dup-results");
+  if (!container) return;
+  container.querySelectorAll("input[data-dup-id]").forEach((cb) => { cb.checked = false; });
+  duplicateGroups.forEach((group) => {
+    const byFolder = new Map();
+    group.items.forEach((item, ii) => {
+      const pid = item.parentId || "";
+      if (!byFolder.has(pid)) byFolder.set(pid, []);
+      byFolder.get(pid).push({ item, ii });
+    });
+    byFolder.forEach((list) => {
+      list.sort((a, b) => (a.item.dateAdded || 0) - (b.item.dateAdded || 0));
+      list.slice(1).forEach(({ item }) => {
+        const cb = container.querySelector(`input[data-dup-id="${item.id}"]`);
+        if (cb) cb.checked = true;
+      });
+    });
+  });
+  container.querySelectorAll(".group").forEach((group) => syncSelectAll(group));
   updateCleanupBottomBar();
 });
 

@@ -751,6 +751,14 @@
         <button type="button" class="primary" id="scan-duplicates">Find duplicates</button>
         <span id="dup-status" class="loading"></span>
       </div>
+      <div class="scan-row" id="dup-select-actions" style="display: none; flex-wrap: wrap; align-items: center; gap: 8px;">
+        <label style="font-size: 0.9rem; color: var(--muted);">Select:</label>
+        <select id="dup-select-folder" style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 0.9rem; min-width: 180px;">
+          <option value="">— Folder —</option>
+        </select>
+        <button type="button" class="small" id="dup-select-in-folder">Select in folder</button>
+        <button type="button" class="small" id="dup-select-all-but-oldest">Select all but oldest (per folder)</button>
+      </div>
       <div id="dup-results" class="results"></div>
     </div>
 
