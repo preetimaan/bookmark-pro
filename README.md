@@ -19,8 +19,8 @@ Reload the extension after code changes (refresh icon on the extension card). No
 
 ### Bookmarks tab
 
-- **Folder tree** — Sidebar with expand/collapse (state kept when switching tabs). **New folder** button creates a folder under the selected folder (or Bookmarks bar). **Rename** via double-click on folder name or ✎ icon; **delete** via ⌫ (with confirmation; recursively removes folder and contents).
-- **Main pane** — Shows subfolders and bookmarks for the selected folder. **Add bookmark** adds the current window’s first non-extension tab (or the active tab if it’s a page) into the selected folder. **Add folder** creates a new subfolder in the selected folder (same as sidebar “New folder”). **Drag and drop** — Drag bookmarks or folders in the list to reorder; drag onto a folder in the sidebar to move into that folder. Drag sidebar folders to another folder or into the list. Content wraps (no horizontal scroll).
+- **Folder tree** — Sidebar with expand/collapse (state kept when switching tabs). Each folder shows a **total count** of bookmarks (recursive: folder + all subfolders). **New folder** button creates a folder under the selected folder (or Bookmarks bar). **Rename** via double-click on folder name or ✎ icon; **delete** via ⌫ (with confirmation; recursively removes folder and contents). Sidebar width is **resizable** (drag handle); width persists.
+- **Main pane** — Shows subfolders and bookmarks for the selected folder. **Add bookmark** adds the current window’s first non-extension tab (or the active tab if it’s a page) into the selected folder. **Add folder** creates a new subfolder in the selected folder (same as sidebar “New folder”). **Drag and drop** — Drag bookmarks or folders in the list to reorder; drag onto a folder in the sidebar to move into that folder. When **multiple bookmarks are selected**, dragging any selected row moves the **whole selection** to the drop target (folder or new position in list). Drag sidebar folders to another folder or into the list. Folder context menu: **Merge into folder…** to manually merge a folder into another. Content wraps (no horizontal scroll).
 - **Inline edit** — Double-click title or URL to edit, or click ✎ next to name or URL; tags stay in sync. **Copy** (⎘) next to name and URL to copy to clipboard.
 - **Context menu** — Right-click a bookmark: Open in new tab, Copy URL, Copy name, Edit, Delete. Right-click a folder (in list or sidebar): Open folder / Rename, Delete.
 - **Tags** — Add/remove tags per bookmark; pills use a hash-based color. Autocomplete from existing tags.
@@ -38,11 +38,11 @@ Reload the extension after code changes (refresh icon on the extension card). No
 
 ### Cleanup tab
 
-- **Duplicate URLs** — Find and delete exact duplicates.
+- **Duplicate URLs** — Find and delete exact duplicates. **Select by folder:** dropdown (includes parent folders) + “Select in folder” to select duplicates in that folder and its descendants. “Select all but oldest (per folder)” selects all except the oldest in each folder for each duplicate group.
 - **Empty folders** — Find and remove recursively empty folders.
-- **Merge folders** — Same name under same parent; pick one to keep.
+- **Merge folders** — Same-name folders anywhere in the tree; merge into one (duplicate bookmarks by URL skipped; same-name subfolders merged recursively).
 - **Similar URLs** — Prefix/subset URL groups; optional strip query.
-- **Similar folders** — Same-name folders anywhere in the tree; merge into one.
+- **Similar folders** — Same-name folders anywhere in the tree; merge into one (same as Merge folders).
 - **Broken links** — Check for 404, 403, timeouts, etc. (requests `<all_urls>` when used). HEAD then GET retry with delay.
 
 ### Theme
@@ -55,19 +55,24 @@ Reload the extension after code changes (refresh icon on the extension card). No
 
 | Area            | Feature                          | Status |
 |-----------------|-----------------------------------|--------|
-| **Bookmarks**   | Folder tree, expand/collapse      | Done   |
+| **Bookmarks**   | Folder tree, expand/collapse, total count (recursive) | Done   |
+|                 | Resizable sidebar (persisted width) | Done   |
 |                 | Add bookmark / Add folder (toolbar) | Done (Group 2) |
 |                 | Bookmark list, mixed folders+URLs | Done   |
 |                 | Inline edit title/URL            | Done   |
 |                 | Tags on bookmarks, pills, +tag   | Done   |
 |                 | Multi-select, bulk delete/move/tag | Done |
+|                 | Multi-select drag (move selection to folder / reorder) | Done |
 |                 | Search (title, URL, tag)         | Done   |
 |                 | Permanent sort (folder)         | Done   |
+|                 | Manual merge: Merge into folder… (context menu) | Done   |
 | **Tags**        | Tags tab, add/rename/delete      | Done   |
 |                 | Title encoding `#tag1 #tag2 Title` | Done  |
 |                 | storage.sync, priority (1–3), search, inline rename | Done |
 |                 | Filter by tag                    | Via search |
 | **Cleanup**     | Duplicates, empty, merge         | Done   |
+|                 | Duplicates: select by folder, select all but oldest (per folder) | Done   |
+|                 | Merge: same-name anywhere; skip duplicate URLs; manual merge    | Done   |
 |                 | Similar URLs, similar folders    | Done   |
 |                 | Broken links                     | Done   |
 |                 | Scope (folder tree dropdown)     | Done   |

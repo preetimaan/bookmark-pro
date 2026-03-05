@@ -120,24 +120,24 @@ Chrome extension for cleaning bookmarks: duplicates, empty folders, mergeable fo
 
 ## Recent UX (manager)
 
-- **Folder create/rename/delete (Group 1)** — “New folder” button in sidebar creates a folder under the selected folder (or Bookmarks bar) and starts rename. Rename: double-click folder name or click ✎; delete: click ⌫ with confirmation; delete recursively removes folder and all contents. Root folders (Bookmarks bar / Other bookmarks) cannot be renamed or deleted.
+- **Folder create/rename/delete (Group 1)** — “New folder” button in sidebar creates a folder under the selected folder (or Bookmarks bar) and starts rename. Rename: double-click folder name or click ✎; delete: click ⌫ with confirmation; delete recursively removes folder and all contents. Root folders (Bookmarks bar / Other bookmarks) cannot be renamed or deleted. Each folder row shows **total bookmark count** (recursive). Sidebar width is resizable (drag handle); width persisted in localStorage.
 - **Add bookmark / Add folder (Group 2)** — Main toolbar: “Add bookmark” adds the current window’s first non-extension tab (or active page tab) into the selected folder; requires `tabs` permission. “Add folder” creates a new subfolder in the selected folder (same as sidebar “New folder”).
-- **Drag and drop (Group 3)** — Bookmark list: drag bookmarks or folder entries to reorder (same folder) or drop on a sidebar folder to move. Sidebar: drag folder rows to move into another folder or into the list. Drop indicator line in list; folder rows highlight as drop targets. Cannot drop a folder into itself or a descendant.
+- **Drag and drop (Group 3)** — Bookmark list: drag bookmarks or folder entries to reorder (same folder) or drop on a sidebar folder to move. When **multiple bookmarks are selected**, dragging any selected row moves the **whole selection** to the drop target (folder or list position). Sidebar: drag folder rows to move into another folder or into the list. Folder context menu: **Merge into folder…** to manually merge a folder into another (same dedupe/merge logic as cleanup). Drop indicator line in list; folder rows highlight as drop targets. Cannot drop a folder into itself or a descendant.
 - **Context menu (Group 4)** — Right-click on bookmark row: Open in new tab, Copy URL, Copy name, Edit, Delete. Right-click on folder (main list or sidebar): Open folder (list only), Rename, Delete. In-page menu (no chrome.contextMenus); closes on click outside or Escape.
 - **Import / Export (Group 5)** — Export as HTML (Netscape Bookmark File format) or as JSON (full tree + tags keyed by bookmark id). Import from HTML (parse DL/DT/A and H3+DL) or from JSON (create tree under selected folder, map old ids to new ids, apply tags). Import target: selected folder or Bookmarks bar.
 - **Scope** — Cleanup scans can be limited to a folder: dropdown with tree-style list (indented). “All bookmarks” or pick a folder; only that subtree is scanned.
+- **Duplicate URLs selection** — After “Find duplicates”: dropdown lists all folders in scope (including parents). “Select in folder” selects duplicates in the chosen folder and its descendants. “Select all but oldest (per folder)” selects all except the oldest in each folder for each duplicate group.
+- **Merge folders** — Same-name folders found anywhere in the tree (not just same parent). Merge skips duplicate bookmarks (same URL); same-name subfolders merged recursively. Manual merge: folder context menu “Merge into folder…” with move-modal tree (source folder excluded).
 - **Inline edit in cleanup** — Edit icon (✎) next to name and URL in duplicate/similar-URL/broken results; copy icon (⎘) next to name and URL. Double-click name also edits title.
 - **Rescan** — After edit or delete in cleanup, rescan is debounced (15s idle). No rescan if user only opens edit and cancels or saves without changing value.
 - **Delete flow** — After deleting from duplicate/similar/broken results: remove deleted rows from DOM; remove duplicate groups that have ≤1 item left; clear selections and hide bottom bar. Same for empty/merge/similar-folders.
-- **Layout** — Result items wrap (no horizontal scroll); edit/copy buttons in wrap.
+- **Layout** — Result items wrap (no horizontal scroll); edit/copy buttons in wrap. Sidebar resizable; bookmark name/URL wrap (no horizontal scrollbar).
 
 ---
 
 ## Roadmap (next)
 
-1. **Cleanup result row consistency** — Hide edit/copy icons in cleanup panels (duplicates, similar URLs, broken) via CSS so bookmark results match main list layout but with fewer actions; reduces visual noise in cleanup.
-2. **Adjustable sidebar** — Make the Bookmarks-tab folder sidebar width user-resizable (drag handle); persist width in localStorage.
-3. **Wrap bookmark name/URL** — Ensure bookmark list and cleanup rows wrap title and URL to available space with no horizontal scrollbar (overflow-x: hidden, min-width: 0, word-break/overflow-wrap where needed).
+- (Adjustable sidebar, wrap, and cleanup row layout are done.)
 
 ---
 
