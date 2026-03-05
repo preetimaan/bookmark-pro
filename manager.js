@@ -30,12 +30,27 @@ function $(id) {
   return document.getElementById(id);
 }
 
-function showToast(message) {
+let toastTimeout = null;
+function showToast(message, options = {}) {
   const el = $("toast");
+  if (!el) return;
+  if (toastTimeout) clearTimeout(toastTimeout);
   el.textContent = message;
+  el.title = "Click to dismiss";
   el.style.display = "block";
-  setTimeout(() => { el.style.display = "none"; }, 3000);
+  const isError = options.isError ?? /failed|error:|Error/i.test(message);
+  if (isError) console.error("[Bookmark Pro]", message);
+  const ms = options.duration ?? (isError ? 12000 : 3000);
+  toastTimeout = setTimeout(() => {
+    el.style.display = "none";
+    toastTimeout = null;
+  }, ms);
 }
+$("toast")?.addEventListener("click", () => {
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = null;
+  $("toast").style.display = "none";
+});
 
 function escapeHtml(s) {
   const div = document.createElement("div");
