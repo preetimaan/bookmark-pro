@@ -284,6 +284,16 @@ async function renderFolderTree() {
   }
 }
 
+function countBookmarksInNode(node) {
+  if (!node?.children) return 0;
+  let n = 0;
+  for (const c of node.children) {
+    if (c.url) n += 1;
+    else n += countBookmarksInNode(c);
+  }
+  return n;
+}
+
 function buildFolderNode(node) {
   if (!node.children) return document.createDocumentFragment();
 
@@ -293,8 +303,7 @@ function buildFolderNode(node) {
   row.dataset.folderId = node.id;
 
   const hasSubfolders = node.children.some((c) => c.children);
-  const bookmarkCount = node.children.filter((c) => c.url).length;
-  const isMixed = hasSubfolders && bookmarkCount > 0;
+  const totalCount = countBookmarksInNode(node);
   const expanded = hasSubfolders && isFolderExpanded(node.id);
   const isRoot = node.id === "0";
   const menuBtn = isRoot ? "" : `<button type="button" class="folder-menu-btn" title="Folder menu" aria-label="Folder menu">⋮</button>`;
@@ -302,7 +311,7 @@ function buildFolderNode(node) {
   row.innerHTML = `
     <span class="arrow">${hasSubfolders ? (expanded ? "▼" : "▶") : ""}</span>
     <span class="folder-name">${escapeHtml(node.title || "Bookmarks")}</span>
-    <span class="folder-count">${isMixed || bookmarkCount === 0 ? "" : bookmarkCount}</span>
+    <span class="folder-count">${totalCount > 0 ? totalCount : ""}</span>
     ${menuBtn}
   `;
 
