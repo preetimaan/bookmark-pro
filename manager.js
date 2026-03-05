@@ -2117,6 +2117,13 @@ async function populateCleanupScopeDropdown() {
   const current = sel.value;
   sel.innerHTML = options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
   if (options.some((o) => o.value === current)) sel.value = current;
+
+  const similarScopeSel = $("similar-folders-scope");
+  if (similarScopeSel) {
+    const similarCurrent = similarScopeSel.value;
+    similarScopeSel.innerHTML = options.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
+    if (options.some((o) => o.value === similarCurrent)) similarScopeSel.value = similarCurrent;
+  }
 }
 
 function syncSelectAll(group) {
@@ -2489,8 +2496,8 @@ $("scan-similar-folders").addEventListener("click", async () => {
   $("similar-folders-results").innerHTML = "";
 
   const { folders, tree } = await ensureData();
-  const scopeId = $("cleanup-scope-folder")?.value || null;
-  const scopeFolderIds = getCleanupScopeFolderIds(scopeId, folders);
+  const scopeId = $("similar-folders-scope")?.value ?? $("cleanup-scope-folder")?.value ?? null;
+  const scopeFolderIds = getCleanupScopeFolderIds(scopeId || null, folders);
   const scopeFolders = folders.filter((f) => scopeFolderIds.has(f.id));
   similarFolderGroups = findSimilarFolderGroups(scopeFolders, tree);
 

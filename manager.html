@@ -797,7 +797,11 @@
     <div id="panel-similar-folders" class="panel">
       <h2>Similar folder names</h2>
       <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Folders with the same name anywhere in the tree. Pick one to keep; others will be merged into it. Duplicate bookmarks (same URL) are skipped; same-name subfolders are merged.</p>
-      <div class="scan-row">
+      <div class="scan-row" style="flex-wrap: wrap; align-items: center; gap: 8px;">
+        <label for="similar-folders-scope" style="font-size: 0.9rem; color: var(--muted);">Search in:</label>
+        <select id="similar-folders-scope" style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 0.9rem; min-width: 180px;">
+          <option value="">All bookmarks</option>
+        </select>
         <button type="button" class="primary" id="scan-similar-folders">Find similar folders</button>
         <span id="similar-folders-status" class="loading"></span>
       </div>
