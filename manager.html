@@ -838,6 +838,24 @@
     </div>
   </div>
 
+  <!-- Import from backup: choose folder -->
+  <div class="modal-backdrop" id="import-folder-modal">
+    <div class="modal">
+      <h2>Import from backup</h2>
+      <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 12px;">Choose which folder from the backup file to import, or import the entire file.</p>
+      <label style="display: block; font-size: 0.9rem; margin-bottom: 4px; color: var(--muted);">Folder from backup:</label>
+      <select id="import-backup-folder-picker" style="width: 100%; max-width: 100%; margin-bottom: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 0.9rem;">
+        <option value="">— Select —</option>
+      </select>
+      <label style="display: block; font-size: 0.9rem; margin-bottom: 4px; color: var(--muted);">Import into:</label>
+      <div id="import-backup-dest" style="font-size: 0.9rem; margin-bottom: 16px;"></div>
+      <div class="modal-actions">
+        <button type="button" class="small" id="import-folder-cancel">Cancel</button>
+        <button type="button" class="primary" id="import-folder-confirm">Import</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Move-to / Merge-into modal -->
   <div class="modal-backdrop" id="move-modal">
     <div class="modal">

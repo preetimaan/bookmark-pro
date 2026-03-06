@@ -2,6 +2,10 @@
 
 Chrome extension: bookmark manager with tags, folder tree, and cleanup tools. Uses Chrome’s Bookmarks API and Storage Sync — no backend; tags sync across devices with your Chrome account.
 
+**Bookmark sync:** The extension reads and writes Chrome’s built-in bookmarks. Syncing bookmarks across devices is done by **Chrome**, not the extension. Ensure **Chrome Sync** is on (Settings → You and Google → Sync and Google services) and **Bookmarks** is enabled in sync settings. If bookmarks don’t appear on another device, check that device is signed into the same account and that sync has finished (it can take a few minutes). The manager UI refreshes when the bookmark tree changes (e.g. after sync updates).
+
+**If deletions (e.g. after removing duplicates) don’t sync to other devices:** Chrome is responsible for pushing removals; sometimes sync is delayed or a device with an older copy “wins” and restores items. Try: (1) Leave Chrome open for a few minutes after bulk deletes so sync can run. (2) On the other device, open `chrome://sync-internals` → **Sync** and confirm “Bookmarks” is syncing; trigger **Request sync** if needed. (3) As a last resort, on the device that has the correct (cleaned) bookmarks: export bookmarks (Chrome menu → Bookmarks → Bookmark manager → ⋮ → Export), then on the other device import that file (Chrome will merge; you may need to remove duplicates again there or replace the profile’s bookmarks via import).
+
 ---
 
 ## How to run
@@ -27,7 +31,7 @@ Reload the extension after code changes (refresh icon on the extension card). No
 - **Multi-select** — Select all, deselect all, bulk delete, move to folder, bulk tag.
 - **Search** — Filters by title, URL, or tag across all bookmarks.
 - **Sort** — Dropdown: title A–Z/Z–A, date newest/oldest, URL A–Z/Z–A. Sort is **permanent** (reorders bookmarks in Chrome via `chrome.bookmarks.move`).
-- **Import / Export** — **Export:** as HTML (Netscape format, for backup or use in other apps) or as JSON (includes tags; for backup and restore). **Import:** from HTML or from Bookmark Pro JSON; imports into the selected folder (or Bookmarks bar).
+- **Import / Export** — **Export:** as HTML (Netscape format, for backup or use in other apps) or as JSON (includes tags; for backup and restore). **Import:** from HTML or from Bookmark Pro JSON. After choosing a file, a modal lets you **import the entire file** or **pick one folder** from the backup (dropdown lists all folders by path); imports into the currently selected folder. Chrome’s API does not allow setting creation date on import; use the restore-dates script if you need to restore dates from a backup.
 
 ### Tags tab
 

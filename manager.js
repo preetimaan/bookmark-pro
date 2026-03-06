@@ -117,6 +117,25 @@ function invalidateData() {
   bookmarksData = null;
 }
 
+// When bookmarks change elsewhere (e.g. Chrome Sync, another tab), refresh the UI
+function refreshViewAfterBookmarkChange() {
+  invalidateData();
+  const bookmarksView = $("view-bookmarks");
+  const tagsView = $("view-tags");
+  if (bookmarksView?.classList.contains("active")) {
+    renderFolderTree();
+    if (selectedFolderId) renderBookmarkList(selectedFolderId);
+  } else if (tagsView?.classList.contains("active")) {
+    renderTagsList();
+  }
+}
+
+chrome.bookmarks.onCreated.addListener(() => refreshViewAfterBookmarkChange());
+chrome.bookmarks.onChanged.addListener(() => refreshViewAfterBookmarkChange());
+chrome.bookmarks.onMoved.addListener(() => refreshViewAfterBookmarkChange());
+chrome.bookmarks.onRemoved.addListener(() => refreshViewAfterBookmarkChange());
+chrome.bookmarks.onChildrenReordered.addListener(() => refreshViewAfterBookmarkChange());
+
 // =====================================================
 // TOP-LEVEL TABS: Bookmarks | Cleanup
 // =====================================================
@@ -895,42 +914,14 @@ $("export-menu")?.addEventListener("click", async (e) => {
 $("import-btn")?.addEventListener("click", () => $("import-file")?.click());
 
 async function importFromHtml(html, parentId) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const dl = doc.querySelector("DL");
-  if (!dl) return;
-
-  function collectItems(container) {
-    const items = [];
-    const dts = container.querySelectorAll(":scope > DT");
-    for (const dt of dts) {
-      const a = dt.querySelector(":scope > A");
-      const h3 = dt.querySelector(":scope > H3");
-      const nextDl = dt.querySelector(":scope > DL");
-      if (a) {
-        const href = a.getAttribute("href") || "";
-        const title = (a.textContent || "").trim() || href;
-        const addDate = a.getAttribute("ADD_DATE");
-        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
-        items.push({ type: "bookmark", title, url: href, dateAdded });
-      } else if (h3 && nextDl) {
-        const title = (h3.textContent || "").trim() || "Folder";
-        const addDate = h3.getAttribute("ADD_DATE");
-        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
-        const children = collectItems(nextDl);
-        items.push({ type: "folder", title, dateAdded, children });
-      }
-    }
-    return items;
-  }
-
-  const items = collectItems(dl);
+  const items = parseHtmlToItems(html);
+  if (!items.length) return;
   for (const item of items) {
     if (item.type === "folder") {
-      const folder = await chrome.bookmarks.create({ parentId, title: item.title, dateAdded: item.dateAdded });
+      const folder = await chrome.bookmarks.create({ parentId, title: item.title });
       if (item.children?.length) await importFromHtmlItems(item.children, folder.id);
     } else {
-      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url, dateAdded: item.dateAdded });
+      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url });
     }
   }
 }
@@ -938,10 +929,10 @@ async function importFromHtml(html, parentId) {
 async function importFromHtmlItems(items, parentId) {
   for (const item of items) {
     if (item.type === "folder") {
-      const folder = await chrome.bookmarks.create({ parentId, title: item.title, dateAdded: item.dateAdded });
+      const folder = await chrome.bookmarks.create({ parentId, title: item.title });
       if (item.children?.length) await importFromHtmlItems(item.children, folder.id);
     } else {
-      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url, dateAdded: item.dateAdded });
+      await chrome.bookmarks.create({ parentId, title: item.title, url: item.url });
     }
   }
 }
@@ -960,7 +951,6 @@ async function importFromJson(jsonText, parentId) {
         parentId: apiParentId,
         title: node.title || node.url,
         url: node.url,
-        dateAdded: node.dateAdded,
       });
       idMap[node.id] = created.id;
       return;
@@ -968,7 +958,6 @@ async function importFromJson(jsonText, parentId) {
     const folder = await chrome.bookmarks.create({
       parentId: apiParentId,
       title: node.title || "Folder",
-      dateAdded: node.dateAdded,
     });
     if (node.children) {
       for (const c of node.children) await createNode(folder.id, c);
@@ -989,6 +978,85 @@ async function importFromJson(jsonText, parentId) {
   }
 }
 
+// Parsed backup for "import specific folder" modal. { type, text, items?, data?, folders: { path, item?|node? }[] }
+let importBackupState = null;
+
+function parseHtmlToItems(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const dl = doc.querySelector("DL");
+  if (!dl) return [];
+
+  function collectItems(container) {
+    const items = [];
+    const dts = container.querySelectorAll(":scope > DT");
+    for (const dt of dts) {
+      const a = dt.querySelector(":scope > A");
+      const h3 = dt.querySelector(":scope > H3");
+      const nextDl = dt.querySelector(":scope > DL") || (dt.nextElementSibling?.tagName === "DL" ? dt.nextElementSibling : null);
+      if (a) {
+        const href = a.getAttribute("href") || "";
+        const title = (a.textContent || "").trim() || href;
+        const addDate = a.getAttribute("ADD_DATE");
+        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
+        items.push({ type: "bookmark", title, url: href, dateAdded });
+      } else if (h3) {
+        const title = (h3.textContent || "").trim() || "Folder";
+        const addDate = h3.getAttribute("ADD_DATE");
+        const dateAdded = addDate ? parseInt(addDate, 10) * 1000 : undefined;
+        const children = nextDl ? collectItems(nextDl) : [];
+        items.push({ type: "folder", title, dateAdded, children });
+      }
+    }
+    return items;
+  }
+  return collectItems(dl);
+}
+
+function collectFoldersFromHtmlItems(items, pathPrefix = "") {
+  const list = [];
+  for (const item of items) {
+    if (item.type === "folder") {
+      const path = pathPrefix ? pathPrefix + " / " + item.title : item.title;
+      list.push({ path, item });
+      list.push(...collectFoldersFromHtmlItems(item.children || [], path));
+    }
+  }
+  return list;
+}
+
+function collectFoldersFromJsonTree(children, pathPrefix = "") {
+  if (!children || !Array.isArray(children)) return [];
+  const list = [];
+  for (const node of children) {
+    if (node.children && !node.url) {
+      const path = pathPrefix ? pathPrefix + " / " + (node.title || "Folder") : (node.title || "Folder");
+      list.push({ path, node });
+      list.push(...collectFoldersFromJsonTree(node.children, path));
+    }
+  }
+  return list;
+}
+
+async function importJsonSubtree(apiParentId, node, tags, idMap) {
+  if (node.url) {
+    const created = await chrome.bookmarks.create({
+      parentId: apiParentId,
+      title: node.title || node.url,
+      url: node.url,
+    });
+    idMap[node.id] = created.id;
+    return;
+  }
+  const folder = await chrome.bookmarks.create({
+    parentId: apiParentId,
+    title: node.title || "Folder",
+  });
+  if (node.children) {
+    for (const c of node.children) await importJsonSubtree(folder.id, c, tags, idMap);
+  }
+}
+
 $("import-file")?.addEventListener("change", async (e) => {
   const input = e.target;
   const file = input.files?.[0];
@@ -999,12 +1067,90 @@ $("import-file")?.addEventListener("change", async (e) => {
     const text = await file.text();
     const name = (file.name || "").toLowerCase();
     if (name.endsWith(".json")) {
-      await importFromJson(text, parentId);
-      showToast("Import from JSON done.");
+      const data = JSON.parse(text);
+      const tree = data.tree;
+      if (!tree?.children?.length) {
+        showToast("No bookmarks in JSON file.");
+        return;
+      }
+      const folders = collectFoldersFromJsonTree(tree.children);
+      importBackupState = { type: "json", text, data, folders };
     } else {
-      await importFromHtml(text, parentId);
-      showToast("Import from HTML done.");
+      const items = parseHtmlToItems(text);
+      const folders = collectFoldersFromHtmlItems(items);
+      importBackupState = { type: "html", text, items, folders };
     }
+    const picker = $("import-backup-folder-picker");
+    const destEl = $("import-backup-dest");
+    if (!picker || !destEl) return;
+    const data = await ensureData();
+    const folderMap = {};
+    (data.folders || []).forEach((f) => { folderMap[f.id] = f; });
+    const destPath = getFolderPath(parentId, folderMap) || (parentId === "1" ? "Bookmarks bar" : parentId);
+    destEl.textContent = destPath;
+
+    picker.innerHTML =
+      '<option value="entire">Entire file</option>' +
+      importBackupState.folders.map((f, i) => `<option value="${i}">${escapeHtml(f.path)}</option>`).join("");
+    picker.value = importBackupState.folders.length > 0 ? "0" : "entire";
+
+    $("import-folder-modal")?.classList.add("visible");
+  } catch (err) {
+    showToast("Import failed: " + err.message);
+  }
+});
+
+$("import-folder-cancel")?.addEventListener("click", () => {
+  importBackupState = null;
+  $("import-folder-modal")?.classList.remove("visible");
+});
+
+$("import-folder-modal")?.addEventListener("click", (e) => {
+  if (e.target.id === "import-folder-modal") {
+    importBackupState = null;
+    $("import-folder-modal")?.classList.remove("visible");
+  }
+});
+
+$("import-folder-confirm")?.addEventListener("click", async () => {
+  const picker = $("import-backup-folder-picker");
+  const parentId = selectedFolderId || "1";
+  if (!importBackupState || !picker) return;
+  const value = picker.value;
+  try {
+    if (value === "entire") {
+      if (importBackupState.type === "json") {
+        await importFromJson(importBackupState.text, parentId);
+        showToast("Import from JSON done.");
+      } else {
+        await importFromHtml(importBackupState.text, parentId);
+        showToast("Import from HTML done.");
+      }
+    } else {
+      const idx = parseInt(value, 10);
+      const entry = importBackupState.folders[idx];
+      if (!entry) return;
+      if (importBackupState.type === "html") {
+        const folder = await chrome.bookmarks.create({ parentId, title: entry.item.title });
+        if (entry.item.children?.length) await importFromHtmlItems(entry.item.children, folder.id);
+        showToast("Imported folder \"" + entry.path + "\".");
+      } else {
+        const idMap = {};
+        await importJsonSubtree(parentId, entry.node, importBackupState.data?.tags || {}, idMap);
+        const tags = importBackupState.data?.tags || {};
+        if (Object.keys(idMap).length > 0 && Object.keys(tags).length > 0) {
+          const allTags = await loadAllTags();
+          for (const [oldId, tagList] of Object.entries(tags)) {
+            const newId = idMap[oldId];
+            if (newId && Array.isArray(tagList) && tagList.length) allTags[newId] = tagList;
+          }
+          await saveAllTags(allTags);
+        }
+        showToast("Imported folder \"" + entry.path + "\".");
+      }
+    }
+    importBackupState = null;
+    $("import-folder-modal")?.classList.remove("visible");
     invalidateData();
     await renderFolderTree();
     if (selectedFolderId) await renderBookmarkList(selectedFolderId);
