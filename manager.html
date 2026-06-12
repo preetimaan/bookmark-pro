@@ -810,7 +810,7 @@
 
     <div id="panel-broken" class="panel">
       <h2>Broken links</h2>
-      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Check all bookmarked URLs for broken links (404, 403, timeout, etc.). This needs permission to access websites.</p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 12px;">Check all bookmarked URLs for broken links (404, 403, timeout, etc.). YouTube videos are checked for playback availability even when the page still loads. This needs permission to access websites.</p>
       <div class="scan-row">
         <button type="button" class="primary" id="scan-broken">Check broken links</button>
         <span id="broken-status" class="loading"></span>
@@ -892,6 +892,7 @@
   <script src="lib/duplicates.js"></script>
   <script src="lib/empty-folders.js"></script>
   <script src="lib/merge-folders.js"></script>
+  <script src="lib/youtube.js"></script>
   <script src="lib/subset-finder.js"></script>
   <script src="lib/similar-folders.js"></script>
   <script src="lib/broken-links.js"></script>

@@ -1,6 +1,8 @@
 # Bookmark Pro
 
-Chrome extension: bookmark manager with tags, folder tree, and cleanup tools. Uses Chrome’s Bookmarks API and Storage Sync — no backend; tags sync across devices with your Chrome account.
+Chrome extension: bookmark manager with tags, folder tree, and cleanup tools.
+
+**Architecture:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system design, data model, key flows. Uses Chrome’s Bookmarks API and Storage Sync — no backend; tags sync across devices with your Chrome account.
 
 **Bookmark sync:** The extension reads and writes Chrome’s built-in bookmarks. Syncing bookmarks across devices is done by **Chrome**, not the extension. Ensure **Chrome Sync** is on (Settings → You and Google → Sync and Google services) and **Bookmarks** is enabled in sync settings. If bookmarks don’t appear on another device, check that device is signed into the same account and that sync has finished (it can take a few minutes). The manager UI refreshes when the bookmark tree changes (e.g. after sync updates).
 

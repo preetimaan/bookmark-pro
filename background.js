@@ -1,3 +1,5 @@
+importScripts("lib/youtube.js");
+
 chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
@@ -23,6 +25,20 @@ async function checkUrlInBackground(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), BROKEN_LINK_TIMEOUT_MS);
   try {
+    const youtubeResult = await checkYoutubeVideoAvailability(url, controller.signal);
+    if (youtubeResult !== null) {
+      clearTimeout(timer);
+      if (youtubeResult.available) {
+        return { url, status: 200, error: null, category: "ok" };
+      }
+      return {
+        url,
+        status: null,
+        error: youtubeResult.error || "Video unavailable",
+        category: "youtube_unavailable",
+      };
+    }
+
     const headResp = await fetch(url, {
       method: "HEAD",
       signal: controller.signal,
